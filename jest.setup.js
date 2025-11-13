@@ -9,6 +9,12 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
+// Mock DevMenu (SDK 55 canary issue)
+jest.mock('react-native/src/private/devsupport/devmenu/DevMenu', () => ({
+  show: jest.fn(),
+  reload: jest.fn(),
+}));
+
 // Global DEV flag
 global.__DEV__ = true;
 

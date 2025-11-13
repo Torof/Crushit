@@ -23,37 +23,6 @@ const mockRoute = {
 // Mock Alert
 jest.spyOn(Alert, 'alert');
 
-// Mock Animated API
-jest.mock('react-native', () => {
-  const actualRN = jest.requireActual('react-native');
-  return {
-    ...actualRN,
-    Animated: {
-      ...actualRN.Animated,
-      timing: jest.fn(() => ({
-        start: jest.fn((callback) => callback && callback()),
-      })),
-      loop: jest.fn(() => ({
-        start: jest.fn(),
-      })),
-      parallel: jest.fn(() => ({
-        start: jest.fn((callback) => callback && callback()),
-      })),
-      sequence: jest.fn(() => ({
-        start: jest.fn(),
-      })),
-      Value: jest.fn(() => ({
-        setValue: jest.fn(),
-        interpolate: jest.fn(() => ({
-          interpolate: jest.fn(),
-        })),
-        stopAnimation: jest.fn(),
-      })),
-      createAnimatedComponent: jest.fn((component) => component),
-    },
-  };
-});
-
 describe('CrushDetailScreen', () => {
   const mockCrush = {
     id: '1',

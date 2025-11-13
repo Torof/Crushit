@@ -99,7 +99,8 @@ export const saveCrushes = async (crushes) => {
     const dataString = JSON.stringify(validCrushes);
 
     // Check data size (AsyncStorage has limits)
-    const sizeInBytes = new Blob([dataString]).size;
+    // Calculate UTF-8 byte size (works in React Native)
+    const sizeInBytes = new TextEncoder().encode(dataString).length;
     if (sizeInBytes > 2 * 1024 * 1024) { // 2MB limit
       throw new Error('Data size exceeds storage limit');
     }
