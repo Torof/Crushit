@@ -13,13 +13,17 @@ const mockNavigation = {
   addListener: jest.fn(() => jest.fn()),
 };
 
-// Mock Alert
-jest.spyOn(Alert, 'alert');
-
 describe('CrushListScreen', () => {
+  let alertSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     loadCrushes.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    alertSpy.mockRestore();
   });
 
   describe('Rendering', () => {
@@ -109,7 +113,7 @@ describe('CrushListScreen', () => {
       fireEvent.press(getByTestId('modal-add-crush-button'));
 
       // Should show validation error
-      expect(Alert.alert).toHaveBeenCalledWith(
+      expect(alertSpy).toHaveBeenCalledWith(
         'Erreur',
         'Veuillez entrer un nom valide'
       );
@@ -283,7 +287,7 @@ describe('CrushListScreen', () => {
         fireEvent.press(getByText('Effacer'));
       });
 
-      expect(Alert.alert).toHaveBeenCalledWith(
+      expect(alertSpy).toHaveBeenCalledWith(
         'Effacer toutes les données',
         'Êtes-vous sûr de vouloir supprimer tous les crushes ?',
         expect.any(Array)
@@ -293,8 +297,8 @@ describe('CrushListScreen', () => {
     test('should clear all crushes when confirmed', async () => {
       clearAllCrushes.mockResolvedValue();
 
-      // Mock Alert.alert to auto-confirm
-      Alert.alert.mockImplementation((title, message, buttons) => {
+      // Mock alertSpy to auto-confirm
+      alertSpy.mockImplementation((title, message, buttons) => {
         buttons[1].onPress(); // Press "Tout effacer"
       });
 
@@ -328,7 +332,7 @@ describe('CrushListScreen', () => {
       fireEvent.press(getByTestId('modal-add-crush-button'));
 
       // Should show validation error (sanitizeInput trims whitespace)
-      expect(Alert.alert).toHaveBeenCalledWith(
+      expect(alertSpy).toHaveBeenCalledWith(
         'Erreur',
         'Veuillez entrer un nom valide'
       );
@@ -382,7 +386,7 @@ describe('CrushListScreen', () => {
 
       // Should show error message
       await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalledWith(
+        expect(alertSpy).toHaveBeenCalledWith(
           'Erreur',
           'Impossible de sauvegarder les données'
         );
