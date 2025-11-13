@@ -100,17 +100,19 @@ describe('CrushListScreen', () => {
       // Open modal
       fireEvent.press(getByTestId('open-add-modal-button'));
 
+      // Wait for modal to be visible
       await waitFor(() => {
-        // Try to submit empty name
-        fireEvent.press(getByTestId('modal-add-crush-button'));
+        expect(getByPlaceholderText('Nom')).toBeTruthy();
       });
 
-      await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalledWith(
-          'Erreur',
-          'Veuillez entrer un nom valide'
-        );
-      });
+      // Try to submit empty name (no text input)
+      fireEvent.press(getByTestId('modal-add-crush-button'));
+
+      // Should show validation error
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Erreur',
+        'Veuillez entrer un nom valide'
+      );
     });
 
     test('should sanitize and save crush with valid name', async () => {
@@ -316,18 +318,20 @@ describe('CrushListScreen', () => {
 
       fireEvent.press(getByTestId('open-add-modal-button'));
 
+      // Wait for modal and enter only whitespace
       await waitFor(() => {
-        fireEvent.changeText(getByPlaceholderText('Nom'), '     ');
+        const nameInput = getByPlaceholderText('Nom');
+        fireEvent.changeText(nameInput, '     ');
       });
 
+      // Submit
       fireEvent.press(getByTestId('modal-add-crush-button'));
 
-      await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalledWith(
-          'Erreur',
-          'Veuillez entrer un nom valide'
-        );
-      });
+      // Should show validation error (sanitizeInput trims whitespace)
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Erreur',
+        'Veuillez entrer un nom valide'
+      );
     });
 
     test('should handle special unicode characters', async () => {
@@ -339,17 +343,23 @@ describe('CrushListScreen', () => {
 
       fireEvent.press(getByTestId('open-add-modal-button'));
 
+      // Wait for modal and enter name with emoji
       await waitFor(() => {
-        fireEvent.changeText(getByPlaceholderText('Nom'), 'Sarah 💕');
+        const nameInput = getByPlaceholderText('Nom');
+        fireEvent.changeText(nameInput, 'Sarah 💕');
       });
 
+      // Submit
       fireEvent.press(getByTestId('modal-add-crush-button'));
 
+      // Should save with emoji preserved
       await waitFor(() => {
         expect(saveCrushes).toHaveBeenCalled();
-        const savedData = saveCrushes.mock.calls[0][0];
-        expect(savedData[savedData.length - 1].name).toContain('💕');
       });
+
+      const savedData = saveCrushes.mock.calls[0][0];
+      expect(savedData).toHaveLength(1);
+      expect(savedData[0].name).toContain('💕');
     });
 
     test('should handle storage errors gracefully', async () => {
@@ -361,12 +371,16 @@ describe('CrushListScreen', () => {
 
       fireEvent.press(getByTestId('open-add-modal-button'));
 
+      // Wait for modal and enter a valid name
       await waitFor(() => {
-        fireEvent.changeText(getByPlaceholderText('Nom'), 'Test');
+        const nameInput = getByPlaceholderText('Nom');
+        fireEvent.changeText(nameInput, 'Test');
       });
 
+      // Submit (will trigger storage error)
       fireEvent.press(getByTestId('modal-add-crush-button'));
 
+      // Should show error message
       await waitFor(() => {
         expect(Alert.alert).toHaveBeenCalledWith(
           'Erreur',
