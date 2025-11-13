@@ -179,7 +179,7 @@ describe('CrushListScreen', () => {
     test('should close modal after successful add', async () => {
       saveCrushes.mockResolvedValue();
 
-      const { getByText, getByPlaceholderText, queryByText } = render(
+      const { getByText, getAllByText, getByPlaceholderText, queryByText } = render(
         <CrushListScreen navigation={mockNavigation} />
       );
 
@@ -318,7 +318,7 @@ describe('CrushListScreen', () => {
 
   describe('Security & Edge Cases', () => {
     test('should handle whitespace-only name', async () => {
-      const { getByText, getByPlaceholderText } = render(
+      const { getByText, getAllByText, getByPlaceholderText } = render(
         <CrushListScreen navigation={mockNavigation} />
       );
 
@@ -342,7 +342,7 @@ describe('CrushListScreen', () => {
     test('should handle special unicode characters', async () => {
       saveCrushes.mockResolvedValue();
 
-      const { getByText, getByPlaceholderText } = render(
+      const { getByText, getAllByText, getByPlaceholderText } = render(
         <CrushListScreen navigation={mockNavigation} />
       );
 
@@ -365,7 +365,7 @@ describe('CrushListScreen', () => {
     test('should handle storage errors gracefully', async () => {
       saveCrushes.mockRejectedValue(new Error('Storage full'));
 
-      const { getByText, getByPlaceholderText } = render(
+      const { getByText, getAllByText, getByPlaceholderText } = render(
         <CrushListScreen navigation={mockNavigation} />
       );
 
