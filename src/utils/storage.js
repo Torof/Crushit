@@ -20,6 +20,12 @@ const isValidCrush = (crush) => {
   if (crush.name.length > 50) return false;
   if (crush.description && crush.description.length > 500) return false;
 
+  // Validate new fields (optional for backward compatibility)
+  if (crush.qualities && !Array.isArray(crush.qualities)) return false;
+  if (crush.defects && !Array.isArray(crush.defects)) return false;
+  if (crush.feelings !== undefined && (typeof crush.feelings !== 'number' || crush.feelings < 0 || crush.feelings > 100)) return false;
+  if (crush.order !== undefined && typeof crush.order !== 'number') return false;
+
   // Validate pros and cons
   for (const pro of crush.pros) {
     if (!pro.id || !pro.title || pro.title.length > 100) return false;
@@ -30,7 +36,32 @@ const isValidCrush = (crush) => {
     if (con.description && con.description.length > 500) return false;
   }
 
+  // Validate qualities (if present)
+  if (crush.qualities) {
+    for (const quality of crush.qualities) {
+      if (!quality.id || !quality.text || quality.text.length > 50) return false;
+    }
+  }
+
+  // Validate defects (if present)
+  if (crush.defects) {
+    for (const defect of crush.defects) {
+      if (!defect.id || !defect.text || defect.text.length > 50) return false;
+    }
+  }
+
   return true;
+};
+
+// Migrate old crush data to new format
+const migrateCrush = (crush, index) => {
+  return {
+    ...crush,
+    qualities: crush.qualities || [],
+    defects: crush.defects || [],
+    feelings: crush.feelings !== undefined ? crush.feelings : 50,
+    order: crush.order !== undefined ? crush.order : index,
+  };
 };
 
 export const loadCrushes = async () => {
@@ -59,16 +90,20 @@ export const loadCrushes = async () => {
       return [];
     }
 
-    // Filter out invalid crushes
-    const validCrushes = crushes.filter(isValidCrush);
+    // Migrate crushes to new format
+    const migratedCrushes = crushes.map(migrateCrush);
 
-    // If some crushes were invalid, save the cleaned data
-    if (validCrushes.length !== crushes.length) {
-      console.warn(`Removed ${crushes.length - validCrushes.length} invalid crush(es)`);
+    // Filter out invalid crushes
+    const validCrushes = migratedCrushes.filter(isValidCrush);
+
+    // If some crushes were invalid or migrated, save the cleaned data
+    if (validCrushes.length !== crushes.length || JSON.stringify(validCrushes) !== JSON.stringify(crushes)) {
+      console.warn(`Migrated/cleaned ${crushes.length} crush(es)`);
       await saveCrushes(validCrushes);
     }
 
-    return validCrushes;
+    // Sort by order field
+    return validCrushes.sort((a, b) => a.order - b.order);
   } catch (error) {
     console.error('Error loading crushes:', error);
     return [];

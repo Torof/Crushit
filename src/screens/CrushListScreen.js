@@ -17,6 +17,8 @@ export default function CrushListScreen({ navigation }) {
   const [newCrushName, setNewCrushName] = useState('');
   const [newCrushDescription, setNewCrushDescription] = useState('');
   const [cemeteryModalVisible, setCemeteryModalVisible] = useState(false);
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -51,6 +53,10 @@ export default function CrushListScreen({ navigation }) {
         mistakes: 0,
         pros: [],
         cons: [],
+        qualities: [],
+        defects: [],
+        feelings: 50, // Start at 50% (neutral)
+        order: crushes.length, // Add at the end
         createdAt: new Date().toISOString(),
       };
 
@@ -103,6 +109,32 @@ export default function CrushListScreen({ navigation }) {
     );
   };
 
+  const moveItem = async (index, direction) => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= activeCrushes.length) return;
+
+    const items = [...activeCrushes];
+    const [movedItem] = items.splice(index, 1);
+    items.splice(newIndex, 0, movedItem);
+
+    // Update order fields
+    const updatedActive = items.map((crush, idx) => ({
+      ...crush,
+      order: idx,
+    }));
+
+    const destroyedCrushes = crushes.filter(c => c.mistakes >= 5);
+    const updatedAll = [...updatedActive, ...destroyedCrushes];
+
+    await saveCrushes(updatedAll);
+    setCrushes(updatedAll);
+  };
+
+  const toggleReorderMode = () => {
+    setReorderMode(!reorderMode);
+    setSettingsModalVisible(false);
+  };
+
   const getHeartColor = (livesLeft) => {
     if (livesLeft === 0) return '#333';
     if (livesLeft <= 1) return '#FF4444';
@@ -125,16 +157,11 @@ export default function CrushListScreen({ navigation }) {
         onLongPress={() => deleteCrush(item.id)}
       >
         <View style={styles.crushCardContent}>
-          <Text style={styles.crushName}>
-            {item.name}
-          </Text>
+          <Text style={styles.crushName}>{item.name}</Text>
           <View style={styles.heartContainer}>
-            {[...Array(5)].map((_, index) => (
-              <Text
-                key={index}
-                style={styles.heartIcon}
-              >
-                {index < livesLeft ? '❤️' : '💔'}
+            {[...Array(5)].map((_, idx) => (
+              <Text key={idx} style={styles.heartIcon}>
+                {idx < livesLeft ? '❤️' : '💔'}
               </Text>
             ))}
           </View>
@@ -162,6 +189,17 @@ export default function CrushListScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      {/* Header with Settings Icon */}
+      <View style={styles.headerBar}>
+        <Text style={styles.headerTitle}>Mes Crushes</Text>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => setSettingsModalVisible(true)}
+        >
+          <Text style={styles.settingsIcon}>⚙️</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={activeCrushes}
         renderItem={renderCrush}
@@ -297,6 +335,100 @@ export default function CrushListScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Settings Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={settingsModalVisible}
+        onRequestClose={() => setSettingsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.settingsModalContent}>
+            <Text style={styles.modalTitle}>Paramètres</Text>
+
+            <TouchableOpacity
+              style={styles.settingsOption}
+              onPress={toggleReorderMode}
+            >
+              <Text style={styles.settingsOptionIcon}>↕️</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={styles.settingsOptionTitle}>Réorganiser</Text>
+                <Text style={styles.settingsOptionSubtitle}>Changer l'ordre des crushes</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingsOption}
+              onPress={() => {
+                setSettingsModalVisible(false);
+                clearAllData();
+              }}
+            >
+              <Text style={styles.settingsOptionIcon}>🗑️</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={[styles.settingsOptionTitle, styles.dangerText]}>Effacer toutes les données</Text>
+                <Text style={styles.settingsOptionSubtitle}>Supprimer tous les crushes</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalButton, styles.confirmButton]}
+              onPress={() => setSettingsModalVisible(false)}
+            >
+              <Text style={styles.confirmButtonText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reorder Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={reorderMode}
+        onRequestClose={() => setReorderMode(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.reorderModal]}>
+            <Text style={styles.modalTitle}>Réorganiser les Crushes</Text>
+
+            <FlatList
+              data={activeCrushes}
+              keyExtractor={item => item.id}
+              style={styles.reorderList}
+              renderItem={({ item, index }) => (
+                <View style={styles.reorderItem}>
+                  <Text style={styles.reorderItemName}>{item.name}</Text>
+                  <View style={styles.reorderButtons}>
+                    <TouchableOpacity
+                      style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
+                      onPress={() => moveItem(index, 'up')}
+                      disabled={index === 0}
+                    >
+                      <Text style={styles.reorderButtonText}>↑</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.reorderButton, index === activeCrushes.length - 1 && styles.reorderButtonDisabled]}
+                      onPress={() => moveItem(index, 'down')}
+                      disabled={index === activeCrushes.length - 1}
+                    >
+                      <Text style={styles.reorderButtonText}>↓</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            />
+
+            <TouchableOpacity
+              style={[styles.modalButton, styles.confirmButton, styles.closeCemeteryButton]}
+              onPress={() => setReorderMode(false)}
+            >
+              <Text style={styles.confirmButtonText}>Terminer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -321,6 +453,16 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  crushCardDragging: {
+    opacity: 0.7,
+    elevation: 10,
+    shadowOpacity: 0.3,
+  },
+  crushCardReorderMode: {
+    borderWidth: 2,
+    borderColor: '#FF6B9D',
+    borderStyle: 'dashed',
+  },
   crushCardContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -340,6 +482,98 @@ const styles = StyleSheet.create({
   heartIcon: {
     fontSize: 24,
     marginHorizontal: 2,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FF6B9D',
+  },
+  settingsButton: {
+    padding: 8,
+  },
+  settingsIcon: {
+    fontSize: 28,
+  },
+  reorderBanner: {
+    backgroundColor: '#FFE8F0',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FF6B9D',
+  },
+  reorderBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#FF6B9D',
+    fontWeight: '600',
+  },
+  reorderBannerButton: {
+    fontSize: 14,
+    color: '#FF6B9D',
+    fontWeight: 'bold',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FF6B9D',
+  },
+  dragHandle: {
+    fontSize: 28,
+    color: '#FF6B9D',
+    marginRight: 12,
+    fontWeight: 'bold',
+  },
+  crushNameReorder: {
+    flex: 1,
+  },
+  settingsModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  settingsOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  settingsOptionIcon: {
+    fontSize: 32,
+    marginRight: 16,
+  },
+  settingsOptionTextContainer: {
+    flex: 1,
+  },
+  settingsOptionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  settingsOptionSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  dangerText: {
+    color: '#FF4444',
   },
   emptyContainer: {
     flex: 1,
@@ -518,6 +752,56 @@ const styles = StyleSheet.create({
   },
   navBadgeText: {
     fontSize: 11,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  reorderModal: {
+    height: '70%',
+    maxHeight: 500,
+  },
+  reorderList: {
+    flex: 1,
+    width: '100%',
+    marginVertical: 10,
+  },
+  reorderItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  reorderItemName: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  reorderButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  reorderButton: {
+    backgroundColor: '#FF6B9D',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  reorderButtonDisabled: {
+    backgroundColor: '#DDD',
+    opacity: 0.5,
+  },
+  reorderButtonText: {
+    fontSize: 20,
     color: '#fff',
     fontWeight: 'bold',
   },

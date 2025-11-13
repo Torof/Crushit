@@ -12,6 +12,7 @@ import {
   Dimensions,
   Easing,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { loadCrushes, saveCrushes, sanitizeInput } from '../utils/storage';
 
@@ -35,6 +36,11 @@ export default function CrushDetailScreen({ route, navigation }) {
   const [showPacman, setShowPacman] = useState(false);
   const [eatingHeartIndex, setEatingHeartIndex] = useState(-1);
   const [isAnimatingHeart, setIsAnimatingHeart] = useState(false);
+
+  // New state for qualities, defects, and feelings
+  const [traitModalVisible, setTraitModalVisible] = useState(false);
+  const [traitType, setTraitType] = useState(null); // 'quality' or 'defect'
+  const [traitText, setTraitText] = useState('');
 
   // Animated values using useRef
   const pacmanX = useRef(new Animated.Value(-100)).current;
@@ -197,6 +203,84 @@ export default function CrushDetailScreen({ route, navigation }) {
       setEditDescriptionModalVisible(false);
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de sauvegarder la description');
+    }
+  };
+
+  // New functions for qualities, defects, and feelings
+  const openTraitModal = (type) => {
+    if (crush.mistakes >= 5) {
+      Alert.alert('Game Over', 'Ce crush est game over et ne peut plus être modifié.');
+      return;
+    }
+    setTraitType(type);
+    setTraitModalVisible(true);
+  };
+
+  const addTrait = async () => {
+    const sanitizedText = sanitizeInput(traitText);
+
+    if (sanitizedText === '') {
+      Alert.alert('Erreur', 'Veuillez entrer un texte valide');
+      return;
+    }
+
+    try {
+      const newTrait = {
+        id: Date.now().toString(),
+        text: sanitizedText,
+        createdAt: new Date().toISOString(),
+      };
+
+      let updatedCrush = { ...crush };
+
+      if (traitType === 'quality') {
+        updatedCrush.qualities = [...(crush.qualities || []), newTrait];
+      } else if (traitType === 'defect') {
+        updatedCrush.defects = [...(crush.defects || []), newTrait];
+      }
+
+      await updateCrush(updatedCrush);
+      setTraitText('');
+      setTraitModalVisible(false);
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de sauvegarder');
+    }
+  };
+
+  const removeTrait = async (id, type) => {
+    Alert.alert(
+      'Supprimer',
+      'Êtes-vous sûr ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            let updatedCrush = { ...crush };
+
+            if (type === 'quality') {
+              updatedCrush.qualities = (crush.qualities || []).filter(q => q.id !== id);
+            } else if (type === 'defect') {
+              updatedCrush.defects = (crush.defects || []).filter(d => d.id !== id);
+            }
+
+            await updateCrush(updatedCrush);
+          },
+        },
+      ]
+    );
+  };
+
+  const updateFeelings = async (value) => {
+    try {
+      const updatedCrush = {
+        ...crush,
+        feelings: Math.round(value),
+      };
+      await updateCrush(updatedCrush);
+    } catch (error) {
+      console.error('Error updating feelings:', error);
     }
   };
 
@@ -402,6 +486,91 @@ export default function CrushDetailScreen({ route, navigation }) {
             </TouchableOpacity>
           )
         )}
+
+        {/* Feelings Bar */}
+        <View style={styles.feelingsSection}>
+          <Text style={styles.feelingsTitle}>💗 Niveau de sentiments</Text>
+          <View style={styles.feelingsContainer}>
+            <Text style={styles.feelingsLabel}>😐</Text>
+            <Slider
+              style={styles.feelingsSlider}
+              minimumValue={0}
+              maximumValue={100}
+              value={crush.feelings || 50}
+              onSlidingComplete={updateFeelings}
+              minimumTrackTintColor="#FF6B9D"
+              maximumTrackTintColor="#DDD"
+              thumbTintColor="#FF6B9D"
+              disabled={isDestroyed}
+            />
+            <Text style={styles.feelingsLabel}>😍</Text>
+          </View>
+          <Text style={styles.feelingsValue}>{crush.feelings || 50}%</Text>
+        </View>
+
+        {/* Qualities Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>✨ Qualités ({(crush.qualities || []).length})</Text>
+            <TouchableOpacity
+              style={styles.addActionButton}
+              onPress={() => openTraitModal('quality')}
+              disabled={isDestroyed}
+            >
+              <Text style={styles.addActionText}>+</Text>
+            </TouchableOpacity>
+          </View>
+
+          {(crush.qualities || []).length === 0 ? (
+            <View style={styles.emptyList}>
+              <Text style={styles.emptyText}>Aucune qualité ajoutée</Text>
+            </View>
+          ) : (
+            <View style={styles.traitsContainer}>
+              {(crush.qualities || []).map((quality) => (
+                <TouchableOpacity
+                  key={quality.id}
+                  style={[styles.traitChip, styles.qualityChip]}
+                  onLongPress={() => removeTrait(quality.id, 'quality')}
+                >
+                  <Text style={styles.traitText}>{quality.text}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Defects Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>⚠️ Défauts ({(crush.defects || []).length})</Text>
+            <TouchableOpacity
+              style={[styles.addActionButton, styles.addBadButton]}
+              onPress={() => openTraitModal('defect')}
+              disabled={isDestroyed}
+            >
+              <Text style={styles.addActionText}>+</Text>
+            </TouchableOpacity>
+          </View>
+
+          {(crush.defects || []).length === 0 ? (
+            <View style={styles.emptyList}>
+              <Text style={styles.emptyText}>Aucun défaut ajouté</Text>
+            </View>
+          ) : (
+            <View style={styles.traitsContainer}>
+              {(crush.defects || []).map((defect) => (
+                <TouchableOpacity
+                  key={defect.id}
+                  style={[styles.traitChip, styles.defectChip]}
+                  onLongPress={() => removeTrait(defect.id, 'defect')}
+                >
+                  <Text style={styles.traitText}>{defect.text}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
 
         {/* Cons Section */}
         <View style={styles.section}>
@@ -614,6 +783,53 @@ export default function CrushDetailScreen({ route, navigation }) {
                 onPress={saveDescription}
               >
                 <Text style={styles.confirmButtonText}>Sauvegarder</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Trait Modal (Qualities/Defects) */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={traitModalVisible}
+        onRequestClose={() => setTraitModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {traitType === 'quality' ? 'Ajouter une Qualité' : 'Ajouter un Défaut'}
+            </Text>
+
+            <TextInput
+              style={styles.inputTitle}
+              placeholder={traitType === 'quality' ? 'Ex: Drôle, Intelligent...' : 'Ex: Jaloux, Arrogant...'}
+              value={traitText}
+              onChangeText={setTraitText}
+              autoFocus
+              maxLength={50}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setTraitText('');
+                  setTraitModalVisible(false);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  traitType === 'quality' ? styles.confirmButton : styles.badButton,
+                ]}
+                onPress={addTrait}
+              >
+                <Text style={styles.confirmButtonText}>Ajouter</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -863,5 +1079,77 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     zIndex: 1001,
+  },
+  // New styles for feelings and traits
+  feelingsSection: {
+    backgroundColor: '#FFF',
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  feelingsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  feelingsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feelingsSlider: {
+    flex: 1,
+    marginHorizontal: 10,
+    height: 40,
+  },
+  feelingsLabel: {
+    fontSize: 24,
+  },
+  feelingsValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF6B9D',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  traitsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  traitChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  qualityChip: {
+    backgroundColor: '#E8F5E9',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  defectChip: {
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#F44336',
+  },
+  traitText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
   },
 });
