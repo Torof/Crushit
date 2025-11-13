@@ -375,7 +375,8 @@ describe('Storage Utility Tests', () => {
     });
 
     test('should reject data exceeding 2MB limit', async () => {
-      const hugeCrushes = Array.from({ length: 1000 }, (_, i) => ({
+      // Create enough data to exceed 2MB (each crush ~550 bytes, need ~3900+ crushes)
+      const hugeCrushes = Array.from({ length: 5000 }, (_, i) => ({
         id: String(i),
         name: 'Test' + i,
         description: 'a'.repeat(500),

@@ -15,6 +15,12 @@ jest.mock('react-native/src/private/devsupport/devmenu/DevMenu', () => ({
   reload: jest.fn(),
 }));
 
+// Add TextEncoder polyfill for Node.js (Jest environment)
+if (typeof TextEncoder === 'undefined') {
+  global.TextEncoder = require('util').TextEncoder;
+  global.TextDecoder = require('util').TextDecoder;
+}
+
 // Global DEV flag
 global.__DEV__ = true;
 

@@ -93,17 +93,16 @@ describe('CrushListScreen', () => {
     });
 
     test('should show error when submitting empty name', async () => {
-      const { getByText, getByPlaceholderText } = render(
+      const { getByTestId, getByPlaceholderText } = render(
         <CrushListScreen navigation={mockNavigation} />
       );
 
-      await waitFor(() => {
-        fireEvent.press(getByText('Ajouter'));
-      });
+      // Open modal
+      fireEvent.press(getByTestId('open-add-modal-button'));
 
       await waitFor(() => {
-        const modalAddButton = getByText('Ajouter');
-        fireEvent.press(modalAddButton);
+        // Try to submit empty name
+        fireEvent.press(getByTestId('modal-add-crush-button'));
       });
 
       await waitFor(() => {
@@ -117,31 +116,24 @@ describe('CrushListScreen', () => {
     test('should sanitize and save crush with valid name', async () => {
       saveCrushes.mockResolvedValue();
 
-      const { getByText, getByPlaceholderText } = render(
+      const { getByTestId, getByPlaceholderText } = render(
         <CrushListScreen navigation={mockNavigation} />
       );
 
       // Open modal
+      fireEvent.press(getByTestId('open-add-modal-button'));
+
       await waitFor(() => {
-        fireEvent.press(getByText('Ajouter'));
+        // Enter name with special characters
+        const nameInput = getByPlaceholderText('Nom');
+        fireEvent.changeText(nameInput, '  Test™  ');
+
+        const descInput = getByPlaceholderText('Description (optionnelle)');
+        fireEvent.changeText(descInput, 'Test description');
       });
-
-      // Enter name with special characters
-      const nameInput = getByPlaceholderText('Nom');
-      fireEvent.changeText(nameInput, '  Test™  ');
-
-      const descInput = getByPlaceholderText('Description (optionnelle)');
-      fireEvent.changeText(descInput, 'Test description');
 
       // Submit
-      const modalAddButtons = await waitFor(() => {
-        const buttons = getByText(/Ajouter/);
-        return buttons;
-      });
-
-      // Find the correct add button (modal one, not nav button)
-      const allButtons = queryAllByText(/Ajouter/);
-      fireEvent.press(allButtons[allButtons.length - 1]);
+      fireEvent.press(getByTestId('modal-add-crush-button'));
 
       await waitFor(() => {
         expect(saveCrushes).toHaveBeenCalled();
@@ -318,18 +310,17 @@ describe('CrushListScreen', () => {
 
   describe('Security & Edge Cases', () => {
     test('should handle whitespace-only name', async () => {
-      const { getByText, getAllByText, getByPlaceholderText } = render(
+      const { getByTestId, getByPlaceholderText } = render(
         <CrushListScreen navigation={mockNavigation} />
       );
 
-      fireEvent.press(getByText('Ajouter'));
+      fireEvent.press(getByTestId('open-add-modal-button'));
 
       await waitFor(() => {
         fireEvent.changeText(getByPlaceholderText('Nom'), '     ');
       });
 
-      const allButtons = getAllByText(/Ajouter/);
-      fireEvent.press(allButtons[allButtons.length - 1]);
+      fireEvent.press(getByTestId('modal-add-crush-button'));
 
       await waitFor(() => {
         expect(Alert.alert).toHaveBeenCalledWith(
@@ -342,18 +333,17 @@ describe('CrushListScreen', () => {
     test('should handle special unicode characters', async () => {
       saveCrushes.mockResolvedValue();
 
-      const { getByText, getAllByText, getByPlaceholderText } = render(
+      const { getByTestId, getByPlaceholderText } = render(
         <CrushListScreen navigation={mockNavigation} />
       );
 
-      fireEvent.press(getByText('Ajouter'));
+      fireEvent.press(getByTestId('open-add-modal-button'));
 
       await waitFor(() => {
         fireEvent.changeText(getByPlaceholderText('Nom'), 'Sarah 💕');
       });
 
-      const allButtons = getAllByText(/Ajouter/);
-      fireEvent.press(allButtons[allButtons.length - 1]);
+      fireEvent.press(getByTestId('modal-add-crush-button'));
 
       await waitFor(() => {
         expect(saveCrushes).toHaveBeenCalled();
@@ -365,18 +355,17 @@ describe('CrushListScreen', () => {
     test('should handle storage errors gracefully', async () => {
       saveCrushes.mockRejectedValue(new Error('Storage full'));
 
-      const { getByText, getAllByText, getByPlaceholderText } = render(
+      const { getByTestId, getByPlaceholderText } = render(
         <CrushListScreen navigation={mockNavigation} />
       );
 
-      fireEvent.press(getByText('Ajouter'));
+      fireEvent.press(getByTestId('open-add-modal-button'));
 
       await waitFor(() => {
         fireEvent.changeText(getByPlaceholderText('Nom'), 'Test');
       });
 
-      const allButtons = getAllByText(/Ajouter/);
-      fireEvent.press(allButtons[allButtons.length - 1]);
+      fireEvent.press(getByTestId('modal-add-crush-button'));
 
       await waitFor(() => {
         expect(Alert.alert).toHaveBeenCalledWith(

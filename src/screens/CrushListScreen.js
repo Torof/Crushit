@@ -195,6 +195,8 @@ export default function CrushListScreen({ navigation }) {
         <TouchableOpacity
           style={[styles.navButton, styles.navButtonPrimary]}
           onPress={() => setModalVisible(true)}
+          testID="open-add-modal-button"
+          accessibilityLabel="Ouvrir le formulaire d'ajout"
         >
           <Text style={styles.navIconLarge}>+</Text>
           <Text style={[styles.navLabel, styles.navLabelWhite]}>Ajouter</Text>
@@ -253,6 +255,8 @@ export default function CrushListScreen({ navigation }) {
               <TouchableOpacity
                 style={[styles.modalButton, styles.confirmButton]}
                 onPress={addCrush}
+                testID="modal-add-crush-button"
+                accessibilityLabel="Ajouter le crush"
               >
                 <Text style={styles.confirmButtonText}>Ajouter</Text>
               </TouchableOpacity>

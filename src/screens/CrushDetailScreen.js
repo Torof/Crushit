@@ -411,6 +411,8 @@ export default function CrushDetailScreen({ route, navigation }) {
               style={[styles.addActionButton, styles.addBadButton]}
               onPress={() => openModal('con')}
               disabled={isDestroyed}
+              testID="add-bad-action-button"
+              accessibilityLabel="Ajouter une mauvaise action"
             >
               <Text style={styles.addActionText}>+</Text>
             </TouchableOpacity>
@@ -445,6 +447,8 @@ export default function CrushDetailScreen({ route, navigation }) {
               style={styles.addActionButton}
               onPress={() => openModal('pro')}
               disabled={isDestroyed}
+              testID="add-good-action-button"
+              accessibilityLabel="Ajouter une bonne action"
             >
               <Text style={styles.addActionText}>+</Text>
             </TouchableOpacity>
@@ -527,6 +531,8 @@ export default function CrushDetailScreen({ route, navigation }) {
                   actionType === 'pro' ? styles.confirmButton : styles.badButton,
                 ]}
                 onPress={addAction}
+                testID="modal-add-action-button"
+                accessibilityLabel="Ajouter l'action"
               >
                 <Text style={styles.confirmButtonText}>Ajouter</Text>
               </TouchableOpacity>
