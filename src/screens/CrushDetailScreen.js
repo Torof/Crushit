@@ -579,7 +579,7 @@ export default function CrushDetailScreen({ route, navigation }) {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
               <MaterialIcons name="warning" size={22} color="#EF5350" />
-              <Text style={styles.sectionTitle}>Erreurs ({crush.cons.length})</Text>
+              <Text style={styles.sectionTitle}>Mauvaises actions ({crush.cons.length})</Text>
             </View>
             <TouchableOpacity
               style={[styles.addActionButton, styles.addBadButton]}
@@ -605,9 +605,6 @@ export default function CrushDetailScreen({ route, navigation }) {
                 onLongPress={() => removeAction(con.id, 'con')}
               >
                 <Text style={styles.actionText}>{con.title || con.text}</Text>
-                <Text style={styles.actionDate}>
-                  {new Date(con.createdAt).toLocaleDateString('fr-FR')}
-                </Text>
               </TouchableOpacity>
             ))
           )}
@@ -618,7 +615,7 @@ export default function CrushDetailScreen({ route, navigation }) {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
               <Ionicons name="checkmark-circle" size={22} color="#4CAF50" />
-              <Text style={styles.sectionTitle}>Bonnes Actions ({crush.pros.length})</Text>
+              <Text style={styles.sectionTitle}>Bonnes actions ({crush.pros.length})</Text>
             </View>
             <TouchableOpacity
               style={styles.addActionButton}
@@ -644,9 +641,6 @@ export default function CrushDetailScreen({ route, navigation }) {
                 onLongPress={() => removeAction(pro.id, 'pro')}
               >
                 <Text style={styles.actionText}>{pro.title || pro.text}</Text>
-                <Text style={styles.actionDate}>
-                  {new Date(pro.createdAt).toLocaleDateString('fr-FR')}
-                </Text>
               </TouchableOpacity>
             ))
           )}
@@ -654,7 +648,12 @@ export default function CrushDetailScreen({ route, navigation }) {
 
         {/* Traits Section - Two Columns */}
         <View style={styles.section}>
-          <Text style={styles.traitsSectionTitle}>Personnalité</Text>
+          <LinearGradient
+            colors={['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0.15)', 'rgba(0, 0, 0, 0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.traitsSeparator}
+          />
           <View style={styles.traitsColumns}>
             {/* Left Column - Qualities */}
             <View style={styles.traitsColumn}>
@@ -817,10 +816,10 @@ export default function CrushDetailScreen({ route, navigation }) {
             </Text>
 
             <TouchableOpacity
-              style={[styles.modalButton, styles.confirmButton, styles.closeButton]}
+              style={styles.detailCloseButton}
               onPress={() => setDetailModalVisible(false)}
             >
-              <Text style={styles.confirmButtonText}>Fermer</Text>
+              <Text style={styles.detailCloseButtonText}>✕</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1158,6 +1157,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   // Traits Section Styles (Two Columns)
+  traitsSeparator: {
+    height: 3,
+    marginBottom: 16,
+  },
   traitsSectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -1249,13 +1252,13 @@ const styles = StyleSheet.create({
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 12,
   },
   modalButton: {
-    flex: 1,
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
     borderRadius: 12,
-    marginHorizontal: 6,
   },
   cancelButton: {
     backgroundColor: '#F5F5F5',
@@ -1299,6 +1302,22 @@ const styles = StyleSheet.create({
   closeButton: {
     width: '100%',
     marginHorizontal: 0,
+  },
+  detailCloseButton: {
+    alignSelf: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FF6B9D',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  detailCloseButtonText: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: '300',
+    lineHeight: 24,
   },
   descriptionSection: {
     backgroundColor: '#fff',
