@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,10 @@ import {
   TextInput,
   Modal,
   Alert,
+  Animated,
+  PanResponder,
+  LayoutAnimation,
+  ScrollView,
 } from 'react-native';
 import { loadCrushes, saveCrushes, clearAllCrushes, sanitizeInput } from '../utils/storage';
 
@@ -19,6 +23,14 @@ export default function CrushListScreen({ navigation }) {
   const [cemeteryModalVisible, setCemeteryModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOrder, setDragOrder] = useState([]);
+  const [hoverIndex, setHoverIndex] = useState(null);
+
+  const scrollOffsetRef = useRef(0);
+  const itemHeightRef = useRef(100); // Estimated, will be measured
+  const dragStartIndexRef = useRef(null);
+  const itemPositions = useRef({});
 
   useEffect(() => {
     loadData();
@@ -29,6 +41,20 @@ export default function CrushListScreen({ navigation }) {
       loadData();
     });
     return unsubscribe;
+  }, [navigation]);
+
+  // Add settings icon to navigation header
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          style={{ marginRight: 15 }}
+          onPress={() => setSettingsModalVisible(true)}
+        >
+          <Text style={{ fontSize: 28, color: '#fff' }}>⋮</Text>
+        </TouchableOpacity>
+      ),
+    });
   }, [navigation]);
 
   const loadData = async () => {
@@ -109,30 +135,33 @@ export default function CrushListScreen({ navigation }) {
     );
   };
 
-  const moveItem = async (index, direction) => {
-    const newIndex = direction === 'up' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= activeCrushes.length) return;
+  const saveReorderedCrushes = async () => {
+    const activeCrushes = crushes.filter(c => c.mistakes < 5);
+    const destroyedCrushes = crushes.filter(c => c.mistakes >= 5);
 
-    const items = [...activeCrushes];
-    const [movedItem] = items.splice(index, 1);
-    items.splice(newIndex, 0, movedItem);
-
-    // Update order fields
-    const updatedActive = items.map((crush, idx) => ({
+    // Map dragOrder back to actual crushes with updated order
+    const reorderedActive = dragOrder.map((crush, idx) => ({
       ...crush,
       order: idx,
     }));
 
-    const destroyedCrushes = crushes.filter(c => c.mistakes >= 5);
-    const updatedAll = [...updatedActive, ...destroyedCrushes];
-
+    const updatedAll = [...reorderedActive, ...destroyedCrushes];
     await saveCrushes(updatedAll);
     setCrushes(updatedAll);
   };
 
   const toggleReorderMode = () => {
-    setReorderMode(!reorderMode);
-    setSettingsModalVisible(false);
+    if (!reorderMode) {
+      // Entering reorder mode - initialize drag order
+      const activeCrushes = crushes.filter(c => c.mistakes < 5);
+      setDragOrder(activeCrushes);
+      setReorderMode(true);
+      setSettingsModalVisible(false);
+    } else {
+      // Exiting reorder mode - save changes
+      saveReorderedCrushes();
+      setReorderMode(false);
+    }
   };
 
   const getHeartColor = (livesLeft) => {
@@ -187,31 +216,134 @@ export default function CrushListScreen({ navigation }) {
     );
   };
 
+  // Draggable Item Component - Memoized to prevent re-renders during drag
+  const DraggableItem = React.memo(({ item, index }) => {
+    const [pan] = useState(() => new Animated.ValueXY());
+    const hoverIndexRef = useRef(index);
+
+    const panResponder = React.useMemo(() =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
+
+        onPanResponderGrant: () => {
+          dragStartIndexRef.current = index;
+          hoverIndexRef.current = index;
+          setDraggingId(item.id);
+        },
+
+        onPanResponderMove: (evt, gestureState) => {
+          // Update position - this doesn't cause re-renders
+          pan.setValue({ x: 0, y: gestureState.dy });
+
+          // Calculate target position using refs only - NO state updates
+          const currentItemHeight = itemHeightRef.current;
+          const offset = gestureState.dy / currentItemHeight;
+          const targetIndex = Math.round(dragStartIndexRef.current + offset);
+          const clampedIndex = Math.max(0, Math.min(dragOrder.length - 1, targetIndex));
+
+          // Only store in ref - DO NOT call setState to avoid re-renders
+          hoverIndexRef.current = clampedIndex;
+        },
+
+        onPanResponderRelease: () => {
+          // Perform the reorder on release
+          const finalHoverIndex = hoverIndexRef.current;
+          if (finalHoverIndex !== null && dragStartIndexRef.current !== null && dragStartIndexRef.current !== finalHoverIndex) {
+            const newOrder = [...dragOrder];
+            const [movedItem] = newOrder.splice(dragStartIndexRef.current, 1);
+            newOrder.splice(finalHoverIndex, 0, movedItem);
+            setDragOrder(newOrder);
+          }
+
+          // Reset state
+          setDraggingId(null);
+          dragStartIndexRef.current = null;
+
+          // Animate back to original position
+          Animated.spring(pan, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: false,
+          }).start();
+        },
+      }), [pan, item.id, index]
+    );
+
+    const livesLeft = 5 - item.mistakes;
+    const isBeingDragged = draggingId === item.id;
+
+    return (
+      <Animated.View
+        collapsable={false}
+        style={[
+          styles.reorderItem,
+          {
+            transform: pan.getTranslateTransform(),
+            opacity: isBeingDragged ? 0.7 : 1,
+            shadowOpacity: isBeingDragged ? 0.3 : 0.1,
+            zIndex: isBeingDragged ? 1000 : 1,
+            elevation: isBeingDragged ? 8 : 2,
+          },
+        ]}
+        {...panResponder.panHandlers}
+        onLayout={(e) => {
+          const height = e.nativeEvent.layout.height;
+          itemHeightRef.current = height + 10; // height + marginBottom
+        }}
+      >
+        <View style={styles.dragHandleContainer}>
+          <Text style={styles.dragHandle}>☰</Text>
+        </View>
+        <View style={styles.reorderItemContent}>
+          <Text style={styles.reorderItemName}>{item.name}</Text>
+          <View style={styles.reorderHeartContainer}>
+            {[...Array(5)].map((_, idx) => (
+              <Text key={idx} style={styles.reorderHeartIcon}>
+                {idx < livesLeft ? '❤️' : '💔'}
+              </Text>
+            ))}
+          </View>
+        </View>
+      </Animated.View>
+    );
+  });
+
   return (
     <View style={styles.container}>
-      {/* Header with Settings Icon */}
-      <View style={styles.headerBar}>
-        <Text style={styles.headerTitle}>Mes Crushes</Text>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => setSettingsModalVisible(true)}
-        >
-          <Text style={styles.settingsIcon}>⚙️</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Reorder Mode Banner */}
+      {reorderMode && (
+        <View style={styles.reorderBanner}>
+          <Text style={styles.reorderBannerText}>Maintenez et glissez pour réorganiser</Text>
+          <TouchableOpacity onPress={toggleReorderMode}>
+            <Text style={styles.reorderBannerButton}>Terminer</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      <FlatList
-        data={activeCrushes}
-        renderItem={renderCrush}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Aucun crush pour l'instant</Text>
-            <Text style={styles.emptySubtext}>Utilisez la barre de navigation</Text>
-          </View>
-        }
-      />
+      {reorderMode ? (
+        <ScrollView
+          contentContainerStyle={styles.listContent}
+          scrollEnabled={false}
+        >
+          {dragOrder.map((item, index) => (
+            <DraggableItem key={item.id} item={item} index={index} />
+          ))}
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={activeCrushes}
+          renderItem={renderCrush}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Aucun crush pour l'instant</Text>
+              <Text style={styles.emptySubtext}>Utilisez la barre de navigation</Text>
+            </View>
+          }
+        />
+      )}
 
       {/* Bottom Navigation Bar */}
       <View style={styles.bottomNavBar}>
@@ -382,53 +514,6 @@ export default function CrushListScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Reorder Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={reorderMode}
-        onRequestClose={() => setReorderMode(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, styles.reorderModal]}>
-            <Text style={styles.modalTitle}>Réorganiser les Crushes</Text>
-
-            <FlatList
-              data={activeCrushes}
-              keyExtractor={item => item.id}
-              style={styles.reorderList}
-              renderItem={({ item, index }) => (
-                <View style={styles.reorderItem}>
-                  <Text style={styles.reorderItemName}>{item.name}</Text>
-                  <View style={styles.reorderButtons}>
-                    <TouchableOpacity
-                      style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
-                      onPress={() => moveItem(index, 'up')}
-                      disabled={index === 0}
-                    >
-                      <Text style={styles.reorderButtonText}>↑</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.reorderButton, index === activeCrushes.length - 1 && styles.reorderButtonDisabled]}
-                      onPress={() => moveItem(index, 'down')}
-                      disabled={index === activeCrushes.length - 1}
-                    >
-                      <Text style={styles.reorderButtonText}>↓</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            />
-
-            <TouchableOpacity
-              style={[styles.modalButton, styles.confirmButton, styles.closeCemeteryButton]}
-              onPress={() => setReorderMode(false)}
-            >
-              <Text style={styles.confirmButtonText}>Terminer</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -482,27 +567,6 @@ const styles = StyleSheet.create({
   heartIcon: {
     fontSize: 24,
     marginHorizontal: 2,
-  },
-  headerBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FF6B9D',
-  },
-  settingsButton: {
-    padding: 8,
-  },
-  settingsIcon: {
-    fontSize: 28,
   },
   reorderBanner: {
     backgroundColor: '#FFE8F0',
@@ -772,6 +836,14 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  reorderItemHover: {
+    backgroundColor: '#FFE8F0',
   },
   reorderItemName: {
     flex: 1,
@@ -804,5 +876,31 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#fff',
     fontWeight: 'bold',
+  },
+  dragHandleContainer: {
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reorderItemContent: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reorderHeartContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  reorderHeartIcon: {
+    fontSize: 18,
+    marginHorizontal: 1,
+  },
+  reorderSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 10,
   },
 });

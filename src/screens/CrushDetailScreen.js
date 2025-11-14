@@ -496,7 +496,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               style={styles.feelingsSlider}
               minimumValue={0}
               maximumValue={100}
-              value={crush.feelings || 50}
+              value={crush.feelings ?? 50}
               onSlidingComplete={updateFeelings}
               minimumTrackTintColor="#FF6B9D"
               maximumTrackTintColor="#DDD"
@@ -505,7 +505,7 @@ export default function CrushDetailScreen({ route, navigation }) {
             />
             <Text style={styles.feelingsLabel}>😍</Text>
           </View>
-          <Text style={styles.feelingsValue}>{crush.feelings || 50}%</Text>
+          <Text style={styles.feelingsValue}>{crush.feelings ?? 50}%</Text>
         </View>
 
         {/* Qualities Section */}
