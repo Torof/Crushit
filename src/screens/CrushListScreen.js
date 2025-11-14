@@ -516,8 +516,6 @@ export default function CrushListScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.settingsModalContent}>
-            <Text style={styles.modalTitle}>Paramètres</Text>
-
             <TouchableOpacity
               style={styles.settingsOption}
               onPress={() => {
@@ -574,10 +572,10 @@ export default function CrushListScreen({ navigation }) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.modalButton, styles.confirmButton]}
+              style={styles.settingsCloseButton}
               onPress={() => setSettingsModalVisible(false)}
             >
-              <Text style={styles.confirmButtonText}>Fermer</Text>
+              <Text style={styles.settingsCloseButtonText}>✕</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -679,6 +677,22 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '85%',
     maxWidth: 400,
+  },
+  settingsCloseButton: {
+    alignSelf: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    backgroundColor: '#F5F5F5',
+  },
+  settingsCloseButtonText: {
+    fontSize: 22,
+    color: '#333',
+    fontWeight: '300',
+    lineHeight: 22,
   },
   settingsOption: {
     flexDirection: 'row',
@@ -872,7 +886,7 @@ const styles = StyleSheet.create({
   floatingButton: {
     position: 'absolute',
     bottom: 30,
-    right: 20,
+    alignSelf: 'center',
     backgroundColor: '#FF6B9D',
     width: 60,
     height: 60,
