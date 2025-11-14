@@ -84,8 +84,9 @@ export default function CrushListScreen({ navigation }) {
       ),
       headerRight: () => (
         <TouchableOpacity
-          style={{ marginRight: 15 }}
+          style={{ marginRight: 15, padding: 8 }}
           onPress={() => setSettingsModalVisible(true)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text style={{ fontSize: 28, color: '#fff' }}>⋮</Text>
         </TouchableOpacity>

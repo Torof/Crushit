@@ -60,6 +60,9 @@ export default function CrushDetailScreen({ route, navigation }) {
   // Picture modal state
   const [pictureModalVisible, setPictureModalVisible] = useState(false);
 
+  // Double-tap detection for trait flags
+  const lastTapRef = useRef(null);
+
   // Animated values using useRef
   const pacmanX = useRef(new Animated.Value(-100)).current;
   const pacmanMouth = useRef(new Animated.Value(0)).current;
@@ -428,6 +431,40 @@ export default function CrushDetailScreen({ route, navigation }) {
         },
       ]
     );
+  };
+
+  const toggleTraitFlag = async (id, type) => {
+    try {
+      let updatedCrush = { ...crush };
+
+      if (type === 'quality') {
+        updatedCrush.qualities = (crush.qualities || []).map(q =>
+          q.id === id ? { ...q, flagged: !q.flagged } : q
+        );
+      } else if (type === 'defect') {
+        updatedCrush.defects = (crush.defects || []).map(d =>
+          d.id === id ? { ...d, flagged: !d.flagged } : d
+        );
+      }
+
+      await updateCrush(updatedCrush);
+    } catch (error) {
+      console.error('Error toggling trait flag:', error);
+    }
+  };
+
+  const handleTraitPress = (id, type) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+
+    if (lastTapRef.current && (now - lastTapRef.current) < DOUBLE_TAP_DELAY) {
+      // Double tap detected
+      lastTapRef.current = null;
+      toggleTraitFlag(id, type);
+    } else {
+      // Single tap
+      lastTapRef.current = now;
+    }
   };
 
   const updateFeelings = async (value) => {
@@ -845,9 +882,13 @@ export default function CrushDetailScreen({ route, navigation }) {
                     <TouchableOpacity
                       key={quality.id}
                       style={[styles.traitChip, styles.qualityChip]}
+                      onPress={() => handleTraitPress(quality.id, 'quality')}
                       onLongPress={() => removeTrait(quality.id, 'quality')}
                     >
-                      <Text style={styles.traitText}>{quality.text}</Text>
+                      <Text style={styles.traitText}>
+                        {quality.text}
+                        {quality.flagged && ' ⭐'}
+                      </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -878,9 +919,13 @@ export default function CrushDetailScreen({ route, navigation }) {
                     <TouchableOpacity
                       key={defect.id}
                       style={[styles.traitChip, styles.defectChip]}
+                      onPress={() => handleTraitPress(defect.id, 'defect')}
                       onLongPress={() => removeTrait(defect.id, 'defect')}
                     >
-                      <Text style={styles.traitText}>{defect.text}</Text>
+                      <Text style={styles.traitText}>
+                        {defect.text}
+                        {defect.flagged && ' 🚩'}
+                      </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -1503,7 +1548,7 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     paddingVertical: 14,
-    paddingHorizontal: 32,
+    paddingHorizontal: 20,
     borderRadius: 12,
   },
   cancelButton: {
