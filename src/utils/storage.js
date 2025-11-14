@@ -25,6 +25,7 @@ const isValidCrush = (crush) => {
   if (crush.defects && !Array.isArray(crush.defects)) return false;
   if (crush.feelings !== undefined && (typeof crush.feelings !== 'number' || crush.feelings < 0 || crush.feelings > 100)) return false;
   if (crush.order !== undefined && typeof crush.order !== 'number') return false;
+  if (crush.status !== undefined && !['active', 'ended', 'standby'].includes(crush.status)) return false;
 
   // Validate pros and cons
   for (const pro of crush.pros) {
@@ -61,6 +62,7 @@ const migrateCrush = (crush, index) => {
     defects: crush.defects || [],
     feelings: crush.feelings !== undefined ? crush.feelings : 50,
     order: crush.order !== undefined ? crush.order : index,
+    status: crush.status || 'active', // active, ended, or standby
   };
 };
 
