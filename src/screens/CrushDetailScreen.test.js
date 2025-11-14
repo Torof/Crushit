@@ -20,10 +20,9 @@ const mockRoute = {
   },
 };
 
-// Mock Alert
-jest.spyOn(Alert, 'alert');
-
 describe('CrushDetailScreen', () => {
+  let alertSpy;
+
   const mockCrush = {
     id: '1',
     name: 'Test Crush',
@@ -36,14 +35,13 @@ describe('CrushDetailScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     loadCrushes.mockResolvedValue([mockCrush]);
     saveCrushes.mockResolvedValue();
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
-    jest.useRealTimers();
+    alertSpy.mockRestore();
   });
 
   describe('Rendering', () => {
@@ -109,7 +107,7 @@ describe('CrushDetailScreen', () => {
 
   describe('Adding Actions', () => {
     test('should add a good action (pro)', async () => {
-      const { getByText, getByPlaceholderText, getAllByText } = render(
+      const { getByText, getByPlaceholderText, getByTestId } = render(
         <CrushDetailScreen route={mockRoute} navigation={mockNavigation} />
       );
 
@@ -118,25 +116,29 @@ describe('CrushDetailScreen', () => {
       });
 
       // Open good action modal
-      const addButtons = getAllByText('+');
-      fireEvent.press(addButtons[1]); // Second + button (for pros)
+      fireEvent.press(getByTestId('add-good-action-button'));
 
+      // Wait for modal to appear and fill in the form
       await waitFor(() => {
-        fireEvent.changeText(getByPlaceholderText('Titre'), 'Good deed');
-        fireEvent.changeText(
-          getByPlaceholderText('Description (optionnelle)'),
-          'Helped me'
-        );
+        expect(getByPlaceholderText('Titre')).toBeTruthy();
       });
 
-      fireEvent.press(getByText('Ajouter'));
+      fireEvent.changeText(getByPlaceholderText('Titre'), 'Good deed');
+      fireEvent.changeText(
+        getByPlaceholderText('Description (optionnelle)'),
+        'Helped me'
+      );
+
+      // Submit the form
+      fireEvent.press(getByTestId('modal-add-action-button'));
 
       await waitFor(() => {
         expect(saveCrushes).toHaveBeenCalled();
-        const savedData = saveCrushes.mock.calls[0][0];
-        expect(savedData[0].pros).toHaveLength(1);
-        expect(savedData[0].pros[0].title).toBe('Good deed');
       });
+
+      const savedData = saveCrushes.mock.calls[0][0];
+      expect(savedData[0].pros).toHaveLength(1);
+      expect(savedData[0].pros[0].title).toBe('Good deed');
     });
 
     test('should add a bad action (con) and increase mistakes', async () => {
@@ -167,37 +169,42 @@ describe('CrushDetailScreen', () => {
     });
 
     test('should show error when adding action without title', async () => {
-      const { getByText, getAllByText } = render(
+      const { getByTestId, getByPlaceholderText } = render(
         <CrushDetailScreen route={mockRoute} navigation={mockNavigation} />
       );
 
+      // Open bad action modal
+      fireEvent.press(getByTestId('add-bad-action-button'));
+
+      // Wait for modal to appear
       await waitFor(() => {
-        const addButtons = getAllByText('+');
-        fireEvent.press(addButtons[0]);
+        expect(getByPlaceholderText('Titre')).toBeTruthy();
       });
 
-      await waitFor(() => {
-        fireEvent.press(getByText('Ajouter'));
-      });
+      // Try to submit without entering title
+      fireEvent.press(getByTestId('modal-add-action-button'));
 
-      expect(Alert.alert).toHaveBeenCalledWith('Erreur', 'Veuillez entrer un titre valide');
+      // Should show validation error
+      expect(alertSpy).toHaveBeenCalledWith('Erreur', 'Veuillez entrer un titre valide');
     });
 
     test('should sanitize action inputs', async () => {
-      const { getByText, getByPlaceholderText, getAllByText } = render(
+      const { getByTestId, getByPlaceholderText } = render(
         <CrushDetailScreen route={mockRoute} navigation={mockNavigation} />
       );
 
+      // Open good action modal
+      fireEvent.press(getByTestId('add-good-action-button'));
+
+      // Wait for modal and fill in form
       await waitFor(() => {
-        const addButtons = getAllByText('+');
-        fireEvent.press(addButtons[1]); // Good action
+        expect(getByPlaceholderText('Titre')).toBeTruthy();
       });
 
-      await waitFor(() => {
-        fireEvent.changeText(getByPlaceholderText('Titre'), '  Clean Me™  ');
-      });
+      fireEvent.changeText(getByPlaceholderText('Titre'), '  Clean Me™  ');
 
-      fireEvent.press(getByText('Ajouter'));
+      // Submit
+      fireEvent.press(getByTestId('modal-add-action-button'));
 
       await waitFor(() => {
         expect(saveCrushes).toHaveBeenCalled();
@@ -243,7 +250,7 @@ describe('CrushDetailScreen', () => {
       const crushWith4Mistakes = { ...mockCrush, mistakes: 4 };
       loadCrushes.mockResolvedValue([crushWith4Mistakes]);
 
-      Alert.alert.mockImplementation((title, message, buttons) => {
+      alertSpy.mockImplementation((title, message, buttons) => {
         // Auto-press OK button
         if (buttons && buttons[0]) {
           buttons[0].onPress && buttons[0].onPress();
@@ -265,11 +272,8 @@ describe('CrushDetailScreen', () => {
 
       fireEvent.press(getByText('Ajouter'));
 
-      // Fast-forward timers for animation
-      jest.advanceTimersByTime(7000);
-
       await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalledWith(
+        expect(alertSpy).toHaveBeenCalledWith(
           '☠️ GAME OVER ☠️',
           expect.stringContaining('perdu après 5 erreurs'),
           expect.any(Array)
@@ -290,7 +294,7 @@ describe('CrushDetailScreen', () => {
         fireEvent.press(addButtons[0]);
       });
 
-      expect(Alert.alert).toHaveBeenCalledWith(
+      expect(alertSpy).toHaveBeenCalledWith(
         'Game Over',
         'Ce crush est game over et ne peut plus être modifié.'
       );
@@ -397,7 +401,7 @@ describe('CrushDetailScreen', () => {
         fireEvent(proItem, 'longPress');
       });
 
-      expect(Alert.alert).toHaveBeenCalledWith(
+      expect(alertSpy).toHaveBeenCalledWith(
         "Supprimer l'Action",
         'Êtes-vous sûr ?',
         expect.any(Array)
@@ -419,7 +423,7 @@ describe('CrushDetailScreen', () => {
       };
       loadCrushes.mockResolvedValue([crushWithCon]);
 
-      Alert.alert.mockImplementation((title, message, buttons) => {
+      alertSpy.mockImplementation((title, message, buttons) => {
         // Auto-confirm deletion
         if (buttons && buttons[1]) {
           buttons[1].onPress && buttons[1].onPress();
@@ -464,7 +468,7 @@ describe('CrushDetailScreen', () => {
       fireEvent.press(getByText('Ajouter'));
 
       await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalledWith(
+        expect(alertSpy).toHaveBeenCalledWith(
           'Erreur',
           "Impossible de sauvegarder l'action"
         );
@@ -487,7 +491,7 @@ describe('CrushDetailScreen', () => {
 
       fireEvent.press(getByText('Ajouter'));
 
-      expect(Alert.alert).toHaveBeenCalledWith('Erreur', 'Veuillez entrer un titre valide');
+      expect(alertSpy).toHaveBeenCalledWith('Erreur', 'Veuillez entrer un titre valide');
     });
 
     test('should navigate back when crush not found', async () => {

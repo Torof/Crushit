@@ -13,9 +13,15 @@ import {
   LayoutAnimation,
   ScrollView,
 } from 'react-native';
+import { useFonts, DancingScript_400Regular, DancingScript_700Bold } from '@expo-google-fonts/dancing-script';
 import { loadCrushes, saveCrushes, clearAllCrushes, sanitizeInput } from '../utils/storage';
 
 export default function CrushListScreen({ navigation }) {
+  // Load font
+  const [fontsLoaded] = useFonts({
+    DancingScript_400Regular,
+    DancingScript_700Bold,
+  });
   const [crushes, setCrushes] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [newCrushName, setNewCrushName] = useState('');
@@ -484,10 +490,7 @@ export default function CrushListScreen({ navigation }) {
               onPress={toggleReorderMode}
             >
               <Text style={styles.settingsOptionIcon}>↕️</Text>
-              <View style={styles.settingsOptionTextContainer}>
-                <Text style={styles.settingsOptionTitle}>Réorganiser</Text>
-                <Text style={styles.settingsOptionSubtitle}>Changer l'ordre des crushes</Text>
-              </View>
+              <Text style={styles.settingsOptionTitle}>Réorganiser</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -498,10 +501,7 @@ export default function CrushListScreen({ navigation }) {
               }}
             >
               <Text style={styles.settingsOptionIcon}>🗑️</Text>
-              <View style={styles.settingsOptionTextContainer}>
-                <Text style={[styles.settingsOptionTitle, styles.dangerText]}>Effacer toutes les données</Text>
-                <Text style={styles.settingsOptionSubtitle}>Supprimer tous les crushes</Text>
-              </View>
+              <Text style={[styles.settingsOptionTitle, styles.dangerText]}>Effacer</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -554,8 +554,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   crushName: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontFamily: 'DancingScript_700Bold',
     color: '#333',
     flex: 1,
   },
@@ -847,8 +847,8 @@ const styles = StyleSheet.create({
   },
   reorderItemName: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontFamily: 'DancingScript_700Bold',
     color: '#333',
   },
   reorderButtons: {

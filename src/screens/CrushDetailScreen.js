@@ -14,6 +14,9 @@ import {
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { useFonts, Caveat_400Regular, Caveat_700Bold } from '@expo-google-fonts/caveat';
+import { LinearGradient } from 'expo-linear-gradient';
 import { loadCrushes, saveCrushes, sanitizeInput } from '../utils/storage';
 
 const { width } = Dimensions.get('window');
@@ -23,6 +26,13 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 export default function CrushDetailScreen({ route, navigation }) {
   const { crushId } = route.params;
+
+  // Load handwritten font
+  const [fontsLoaded] = useFonts({
+    Caveat_400Regular,
+    Caveat_700Bold,
+  });
+
   const [crush, setCrush] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [actionType, setActionType] = useState(null); // 'pro' or 'con'
@@ -399,6 +409,11 @@ export default function CrushDetailScreen({ route, navigation }) {
     outputRange: ['0deg', '360deg'],
   });
 
+  // Wait for fonts to load
+  if (!fontsLoaded || !crush) {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
       {/* Pacman Animation */}
@@ -424,10 +439,11 @@ export default function CrushDetailScreen({ route, navigation }) {
         </View>
       )}
 
+      {/* Lives Section */}
       <View style={[styles.header, isDestroyed && styles.destroyedHeader]}>
-        <Text style={styles.headerTitle}>
-          {isDestroyed ? '☠️ GAME OVER ☠️' : animatingDestruction ? '0 VIE RESTANTE' : `${livesLeft} ${livesLeft > 1 ? 'VIES RESTANTES' : 'VIE RESTANTE'}`}
-        </Text>
+        {isDestroyed && (
+          <Text style={styles.headerTitle}>☠️ GAME OVER ☠️</Text>
+        )}
         <View style={styles.heartBar}>
           {isDestroyed ? (
             <Text style={styles.destroyedIconLarge}>☠️</Text>
@@ -458,6 +474,33 @@ export default function CrushDetailScreen({ route, navigation }) {
         </View>
       </View>
 
+      {/* Sentiments Section - Separate but connected */}
+      <View style={styles.sentimentsSection}>
+        {/* Gradient Border */}
+        <LinearGradient
+          colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.8)', 'rgba(255, 255, 255, 0)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.gradientBorder}
+        />
+        <Text style={styles.feelingsLabelText}>Niveau de sentiments :</Text>
+        <View style={styles.feelingsSliderContainer}>
+          <Text style={styles.feelingsLabelCompact}>😐</Text>
+          <Slider
+            style={styles.feelingsSliderCompact}
+            minimumValue={0}
+            maximumValue={100}
+            value={crush.feelings ?? 50}
+            onSlidingComplete={updateFeelings}
+            minimumTrackTintColor="rgba(255, 255, 255, 0.8)"
+            maximumTrackTintColor="rgba(255, 255, 255, 0.5)"
+            thumbTintColor="#fff"
+            disabled={isDestroyed}
+          />
+          <Text style={styles.feelingsLabelCompact}>😍</Text>
+        </View>
+      </View>
+
       <ScrollView style={styles.scrollView}>
         {/* Description Section */}
         {crush.description ? (
@@ -466,11 +509,8 @@ export default function CrushDetailScreen({ route, navigation }) {
             onPress={openEditDescription}
             disabled={isDestroyed}
           >
-            <View style={styles.descriptionHeader}>
-              <Text style={styles.descriptionTitle}>Description</Text>
-              {!isDestroyed && <Text style={styles.editIcon}>✏️</Text>}
-            </View>
             <Text style={styles.descriptionText}>{crush.description}</Text>
+            {!isDestroyed && <Text style={styles.editIconInline}>✏️</Text>}
           </TouchableOpacity>
         ) : (
           !isDestroyed && (
@@ -478,104 +518,18 @@ export default function CrushDetailScreen({ route, navigation }) {
               style={styles.descriptionSection}
               onPress={openEditDescription}
             >
-              <View style={styles.descriptionHeader}>
-                <Text style={styles.descriptionTitle}>Description</Text>
-                <Text style={styles.editIcon}>➕</Text>
-              </View>
               <Text style={styles.emptyDescriptionText}>Appuyez pour ajouter une description</Text>
             </TouchableOpacity>
           )
         )}
 
-        {/* Feelings Bar */}
-        <View style={styles.feelingsSection}>
-          <Text style={styles.feelingsTitle}>💗 Niveau de sentiments</Text>
-          <View style={styles.feelingsContainer}>
-            <Text style={styles.feelingsLabel}>😐</Text>
-            <Slider
-              style={styles.feelingsSlider}
-              minimumValue={0}
-              maximumValue={100}
-              value={crush.feelings ?? 50}
-              onSlidingComplete={updateFeelings}
-              minimumTrackTintColor="#FF6B9D"
-              maximumTrackTintColor="#DDD"
-              thumbTintColor="#FF6B9D"
-              disabled={isDestroyed}
-            />
-            <Text style={styles.feelingsLabel}>😍</Text>
-          </View>
-          <Text style={styles.feelingsValue}>{crush.feelings ?? 50}%</Text>
-        </View>
-
-        {/* Qualities Section */}
+        {/* Bad Actions Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>✨ Qualités ({(crush.qualities || []).length})</Text>
-            <TouchableOpacity
-              style={styles.addActionButton}
-              onPress={() => openTraitModal('quality')}
-              disabled={isDestroyed}
-            >
-              <Text style={styles.addActionText}>+</Text>
-            </TouchableOpacity>
-          </View>
-
-          {(crush.qualities || []).length === 0 ? (
-            <View style={styles.emptyList}>
-              <Text style={styles.emptyText}>Aucune qualité ajoutée</Text>
+            <View style={styles.sectionHeaderLeft}>
+              <MaterialIcons name="warning" size={22} color="#EF5350" />
+              <Text style={styles.sectionTitle}>Erreurs ({crush.cons.length})</Text>
             </View>
-          ) : (
-            <View style={styles.traitsContainer}>
-              {(crush.qualities || []).map((quality) => (
-                <TouchableOpacity
-                  key={quality.id}
-                  style={[styles.traitChip, styles.qualityChip]}
-                  onLongPress={() => removeTrait(quality.id, 'quality')}
-                >
-                  <Text style={styles.traitText}>{quality.text}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Defects Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>⚠️ Défauts ({(crush.defects || []).length})</Text>
-            <TouchableOpacity
-              style={[styles.addActionButton, styles.addBadButton]}
-              onPress={() => openTraitModal('defect')}
-              disabled={isDestroyed}
-            >
-              <Text style={styles.addActionText}>+</Text>
-            </TouchableOpacity>
-          </View>
-
-          {(crush.defects || []).length === 0 ? (
-            <View style={styles.emptyList}>
-              <Text style={styles.emptyText}>Aucun défaut ajouté</Text>
-            </View>
-          ) : (
-            <View style={styles.traitsContainer}>
-              {(crush.defects || []).map((defect) => (
-                <TouchableOpacity
-                  key={defect.id}
-                  style={[styles.traitChip, styles.defectChip]}
-                  onLongPress={() => removeTrait(defect.id, 'defect')}
-                >
-                  <Text style={styles.traitText}>{defect.text}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Cons Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>❌ Mauvaises Actions / Erreurs ({crush.cons.length})</Text>
             <TouchableOpacity
               style={[styles.addActionButton, styles.addBadButton]}
               onPress={() => openModal('con')}
@@ -583,7 +537,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               testID="add-bad-action-button"
               accessibilityLabel="Ajouter une mauvaise action"
             >
-              <Text style={styles.addActionText}>+</Text>
+              <MaterialIcons name="add" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
 
@@ -601,17 +555,20 @@ export default function CrushDetailScreen({ route, navigation }) {
               >
                 <Text style={styles.actionText}>{con.title || con.text}</Text>
                 <Text style={styles.actionDate}>
-                  {new Date(con.createdAt).toLocaleDateString()}
+                  {new Date(con.createdAt).toLocaleDateString('fr-FR')}
                 </Text>
               </TouchableOpacity>
             ))
           )}
         </View>
 
-        {/* Pros Section */}
+        {/* Good Actions Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>✅ Bonnes Actions ({crush.pros.length})</Text>
+            <View style={styles.sectionHeaderLeft}>
+              <Ionicons name="checkmark-circle" size={22} color="#4CAF50" />
+              <Text style={styles.sectionTitle}>Bonnes Actions ({crush.pros.length})</Text>
+            </View>
             <TouchableOpacity
               style={styles.addActionButton}
               onPress={() => openModal('pro')}
@@ -619,7 +576,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               testID="add-good-action-button"
               accessibilityLabel="Ajouter une bonne action"
             >
-              <Text style={styles.addActionText}>+</Text>
+              <MaterialIcons name="add" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
 
@@ -637,11 +594,83 @@ export default function CrushDetailScreen({ route, navigation }) {
               >
                 <Text style={styles.actionText}>{pro.title || pro.text}</Text>
                 <Text style={styles.actionDate}>
-                  {new Date(pro.createdAt).toLocaleDateString()}
+                  {new Date(pro.createdAt).toLocaleDateString('fr-FR')}
                 </Text>
               </TouchableOpacity>
             ))
           )}
+        </View>
+
+        {/* Traits Section - Two Columns */}
+        <View style={styles.section}>
+          <Text style={styles.traitsSectionTitle}>Personnalité</Text>
+          <View style={styles.traitsColumns}>
+            {/* Left Column - Qualities */}
+            <View style={styles.traitsColumn}>
+              <View style={styles.traitsColumnHeader}>
+                <Ionicons name="star" size={18} color="#4CAF50" />
+                <Text style={styles.traitsColumnTitle}>Qualités</Text>
+                <TouchableOpacity
+                  style={styles.addTraitButton}
+                  onPress={() => openTraitModal('quality')}
+                  disabled={isDestroyed}
+                >
+                  <MaterialIcons name="add" size={16} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              {(crush.qualities || []).length === 0 ? (
+                <View style={styles.emptyTraits}>
+                  <Text style={styles.emptyTraitsText}>Aucune</Text>
+                </View>
+              ) : (
+                <View style={styles.traitsContainer}>
+                  {(crush.qualities || []).map((quality) => (
+                    <TouchableOpacity
+                      key={quality.id}
+                      style={[styles.traitChip, styles.qualityChip]}
+                      onLongPress={() => removeTrait(quality.id, 'quality')}
+                    >
+                      <Text style={styles.traitText}>{quality.text}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Right Column - Defects */}
+            <View style={styles.traitsColumn}>
+              <View style={styles.traitsColumnHeader}>
+                <Ionicons name="flag" size={18} color="#FF6B6B" />
+                <Text style={styles.traitsColumnTitle}>Défauts</Text>
+                <TouchableOpacity
+                  style={styles.addTraitButton}
+                  onPress={() => openTraitModal('defect')}
+                  disabled={isDestroyed}
+                >
+                  <MaterialIcons name="add" size={16} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              {(crush.defects || []).length === 0 ? (
+                <View style={styles.emptyTraits}>
+                  <Text style={styles.emptyTraitsText}>Aucun</Text>
+                </View>
+              ) : (
+                <View style={styles.traitsContainer}>
+                  {(crush.defects || []).map((defect) => (
+                    <TouchableOpacity
+                      key={defect.id}
+                      style={[styles.traitChip, styles.defectChip]}
+                      onLongPress={() => removeTrait(defect.id, 'defect')}
+                    >
+                      <Text style={styles.traitText}>{defect.text}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
         </View>
       </ScrollView>
 
@@ -870,6 +899,18 @@ const styles = StyleSheet.create({
   destroyedIconLarge: {
     fontSize: 48,
   },
+  // Sentiments Section - separate but visually connected
+  sentimentsSection: {
+    backgroundColor: '#FF6B9D',
+    paddingTop: 0,
+    paddingBottom: 12,
+    paddingHorizontal: 24,
+  },
+  // Gradient Border at top of sentiments section
+  gradientBorder: {
+    height: 3,
+    marginBottom: 16,
+  },
   scrollView: {
     flex: 1,
   },
@@ -904,13 +945,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   actionItem: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#D7F4D9',
     padding: 12,
     borderRadius: 12,
     marginBottom: 8,
   },
   badActionItem: {
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#FFCDD2',
   },
   actionText: {
     fontSize: 16,
@@ -927,6 +968,133 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  // Danger Section Styles (Bad Actions)
+  dangerSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 6,
+    borderLeftColor: '#EF5350',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dangerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dangerHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dangerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#EF5350',
+  },
+  addDangerButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFEBEE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyDangerList: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  emptyDangerText: {
+    fontSize: 16,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  dangerActionItem: {
+    backgroundColor: '#FFF5F5',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#EF5350',
+  },
+  dangerActionContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  dangerActionText: {
+    flex: 1,
+  },
+  dangerActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  dangerActionDate: {
+    fontSize: 12,
+    color: '#999',
+  },
+  // Section Header with Icon
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  // Traits Section Styles (Two Columns)
+  traitsSectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  traitsColumns: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  traitsColumn: {
+    flex: 1,
+  },
+  traitsColumnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 6,
+  },
+  traitsColumnTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  addTraitButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyTraits: {
+    padding: 16,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  emptyTraitsText: {
+    fontSize: 14,
     color: '#999',
     fontStyle: 'italic',
   },
@@ -1059,6 +1227,12 @@ const styles = StyleSheet.create({
     color: '#666',
     lineHeight: 22,
   },
+  editIconInline: {
+    fontSize: 18,
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    opacity: 0.6,
+  },
   emptyDescriptionText: {
     fontSize: 15,
     color: '#999',
@@ -1066,7 +1240,7 @@ const styles = StyleSheet.create({
   },
   animationContainer: {
     position: 'absolute',
-    top: 50,
+    top: 20,
     left: 0,
     right: 0,
     height: 60,
@@ -1080,45 +1254,28 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 1001,
   },
-  // New styles for feelings and traits
-  feelingsSection: {
-    backgroundColor: '#FFF',
-    padding: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  feelingsTitle: {
+  feelingsLabelText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
+    color: '#fff',
+    fontFamily: 'Caveat_400Regular',
     textAlign: 'center',
+    letterSpacing: 0.5,
+    opacity: 0.95,
+    marginBottom: 8,
   },
-  feelingsContainer: {
+  feelingsSliderContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    width: '100%',
   },
-  feelingsSlider: {
+  feelingsSliderCompact: {
     flex: 1,
     marginHorizontal: 10,
-    height: 40,
+    height: 30,
   },
-  feelingsLabel: {
+  feelingsLabelCompact: {
     fontSize: 24,
-  },
-  feelingsValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FF6B9D',
-    textAlign: 'center',
-    marginTop: 8,
   },
   traitsContainer: {
     flexDirection: 'row',
