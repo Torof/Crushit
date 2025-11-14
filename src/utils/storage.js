@@ -27,6 +27,7 @@ const isValidCrush = (crush) => {
   if (crush.order !== undefined && typeof crush.order !== 'number') return false;
   if (crush.status !== undefined && !['active', 'ended', 'standby'].includes(crush.status)) return false;
   if (crush.diaryEntries && !Array.isArray(crush.diaryEntries)) return false;
+  if (crush.picture !== undefined && crush.picture !== null && typeof crush.picture !== 'string') return false;
 
   // Validate pros and cons
   for (const pro of crush.pros) {
@@ -74,6 +75,7 @@ const migrateCrush = (crush, index) => {
     order: crush.order !== undefined ? crush.order : index,
     status: crush.status || 'active', // active, ended, or standby
     diaryEntries: crush.diaryEntries || [],
+    picture: crush.picture || null,
   };
 };
 

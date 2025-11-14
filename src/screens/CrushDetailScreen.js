@@ -11,12 +11,14 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Image,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from '@expo-google-fonts/caveat';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { loadCrushes, saveCrushes, sanitizeInput } from '../utils/storage';
 
 const { width } = Dimensions.get('window');
@@ -54,6 +56,9 @@ export default function CrushDetailScreen({ route, navigation }) {
 
   // Status modal state
   const [statusModalVisible, setStatusModalVisible] = useState(false);
+
+  // Picture modal state
+  const [pictureModalVisible, setPictureModalVisible] = useState(false);
 
   // Animated values using useRef
   const pacmanX = useRef(new Animated.Value(-100)).current;
@@ -94,7 +99,24 @@ export default function CrushDetailScreen({ route, navigation }) {
   useEffect(() => {
     if (crush && crush.mistakes < 5) {
       navigation.setOptions({
-        title: crush.name,
+        headerTitle: () => (
+          <TouchableOpacity
+            onPress={() => setPictureModalVisible(true)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
+          >
+            <View style={styles.headerProfilePicture}>
+              {crush.picture ? (
+                <Image
+                  source={{ uri: crush.picture }}
+                  style={styles.headerProfileImage}
+                />
+              ) : (
+                <MaterialIcons name="person" size={20} color="#999" />
+              )}
+            </View>
+            <Text style={styles.headerTitle}>{crush.name}</Text>
+          </TouchableOpacity>
+        ),
         headerRight: () => (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15, marginRight: 15 }}>
             <TouchableOpacity
@@ -111,7 +133,23 @@ export default function CrushDetailScreen({ route, navigation }) {
         ),
       });
     } else if (crush) {
-      navigation.setOptions({ title: crush.name });
+      navigation.setOptions({
+        headerTitle: () => (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={styles.headerProfilePicture}>
+              {crush.picture ? (
+                <Image
+                  source={{ uri: crush.picture }}
+                  style={styles.headerProfileImage}
+                />
+              ) : (
+                <MaterialIcons name="person" size={20} color="#999" />
+              )}
+            </View>
+            <Text style={styles.headerTitle}>{crush.name}</Text>
+          </View>
+        ),
+      });
     }
   }, [navigation, crush]);
 
@@ -402,6 +440,63 @@ export default function CrushDetailScreen({ route, navigation }) {
     } catch (error) {
       console.error('Error updating feelings:', error);
     }
+  };
+
+  const pickImage = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder à vos photos.');
+        return;
+      }
+
+      // Pick image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const updatedCrush = {
+          ...crush,
+          picture: result.assets[0].uri,
+        };
+        await updateCrush(updatedCrush);
+        setPictureModalVisible(false);
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de charger la photo');
+      console.error(error);
+    }
+  };
+
+  const deletePicture = async () => {
+    Alert.alert(
+      'Supprimer la photo',
+      'Êtes-vous sûr de vouloir supprimer cette photo ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const updatedCrush = {
+                ...crush,
+                picture: null,
+              };
+              await updateCrush(updatedCrush);
+              setPictureModalVisible(false);
+            } catch (error) {
+              Alert.alert('Erreur', 'Impossible de supprimer la photo');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const stopPacman = () => {
@@ -1058,6 +1153,64 @@ export default function CrushDetailScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Picture Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={pictureModalVisible}
+        onRequestClose={() => setPictureModalVisible(false)}
+      >
+        <View style={styles.pictureModalOverlay}>
+          <View style={styles.pictureModalContent}>
+            {crush.picture ? (
+              <>
+                <Image
+                  source={{ uri: crush.picture }}
+                  style={styles.fullSizeImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.pictureButtons}>
+                  <TouchableOpacity
+                    style={[styles.pictureButton, styles.deleteButton]}
+                    onPress={deletePicture}
+                  >
+                    <MaterialIcons name="delete" size={24} color="#fff" />
+                    <Text style={styles.pictureButtonText}>Supprimer</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.pictureButton, styles.uploadButton]}
+                    onPress={pickImage}
+                  >
+                    <MaterialIcons name="photo-library" size={24} color="#fff" />
+                    <Text style={styles.pictureButtonText}>Changer</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.noPictureContainer}>
+                  <MaterialIcons name="person" size={120} color="#DDD" />
+                  <Text style={styles.noPictureText}>Aucune photo</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.pictureButton, styles.uploadButton, { width: '80%' }]}
+                  onPress={pickImage}
+                >
+                  <MaterialIcons name="add-a-photo" size={24} color="#fff" />
+                  <Text style={styles.pictureButtonText}>Ajouter une photo</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity
+              style={styles.closePictureModal}
+              onPress={() => setPictureModalVisible(false)}
+            >
+              <Text style={styles.closePictureModalText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1560,5 +1713,90 @@ const styles = StyleSheet.create({
   },
   dangerText: {
     color: '#FF4444',
+  },
+  // Header profile picture styles
+  headerProfilePicture: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  headerProfileImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  // Picture modal styles
+  pictureModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pictureModalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullSizeImage: {
+    width: '100%',
+    height: 400,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  noPictureContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  noPictureText: {
+    fontSize: 18,
+    color: '#999',
+    marginTop: 16,
+  },
+  pictureButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  pictureButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 8,
+  },
+  uploadButton: {
+    backgroundColor: '#FF6B9D',
+  },
+  pictureButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  closePictureModal: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  closePictureModalText: {
+    fontSize: 28,
+    color: '#fff',
+    fontWeight: '300',
   },
 });
