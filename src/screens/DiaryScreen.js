@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from '@expo-google-fonts/caveat';
-import { loadCrushes, saveCrushes, sanitizeInput } from '../utils/storage';
+import { loadCrushes, saveCrushes, sanitizeInput, loadThemeColor } from '../utils/storage';
 
 export default function DiaryScreen({ route, navigation }) {
   const { crushId } = route.params;
@@ -28,6 +28,9 @@ export default function DiaryScreen({ route, navigation }) {
   const [entryDescription, setEntryDescription] = useState('');
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
+  const [themeColor, setThemeColor] = useState('#FF6B9D');
+  const [isEditingEntry, setIsEditingEntry] = useState(false);
+  const [editedDescription, setEditedDescription] = useState('');
 
   useEffect(() => {
     loadCrush();
@@ -40,6 +43,10 @@ export default function DiaryScreen({ route, navigation }) {
       setCrush(foundCrush);
       navigation.setOptions({ title: `Journal de ${foundCrush.name}` });
     }
+
+    // Load theme color
+    const color = await loadThemeColor();
+    setThemeColor(color);
   };
 
   const updateCrush = async (updatedCrush) => {
@@ -107,6 +114,40 @@ export default function DiaryScreen({ route, navigation }) {
   const viewEntryDetails = (entry) => {
     setSelectedEntry(entry);
     setDetailModalVisible(true);
+    setIsEditingEntry(false);
+  };
+
+  const startEditingEntry = () => {
+    setEditedDescription(selectedEntry?.description || '');
+    setIsEditingEntry(true);
+  };
+
+  const saveEditedEntry = async () => {
+    const sanitizedDescription = sanitizeInput(editedDescription);
+
+    try {
+      const updatedEntries = (crush.diaryEntries || []).map(entry =>
+        entry.id === selectedEntry.id
+          ? { ...entry, description: sanitizedDescription }
+          : entry
+      );
+
+      const updatedCrush = {
+        ...crush,
+        diaryEntries: updatedEntries,
+      };
+
+      await updateCrush(updatedCrush);
+      setSelectedEntry({ ...selectedEntry, description: sanitizedDescription });
+      setIsEditingEntry(false);
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de sauvegarder les modifications');
+    }
+  };
+
+  const cancelEditingEntry = () => {
+    setIsEditingEntry(false);
+    setEditedDescription('');
   };
 
   if (!crush || !fontsLoaded) {
@@ -132,7 +173,7 @@ export default function DiaryScreen({ route, navigation }) {
           diaryEntries.map((entry) => (
             <TouchableOpacity
               key={entry.id}
-              style={styles.entryCard}
+              style={[styles.entryCard, { borderLeftColor: themeColor }]}
               onPress={() => viewEntryDetails(entry)}
             >
               <View style={styles.entryHeader}>
@@ -156,7 +197,7 @@ export default function DiaryScreen({ route, navigation }) {
 
       {/* Floating Add Button */}
       <TouchableOpacity
-        style={styles.floatingButton}
+        style={[styles.floatingButton, { backgroundColor: themeColor }]}
         onPress={() => setModalVisible(true)}
       >
         <MaterialIcons name="add" size={32} color="#fff" />
@@ -205,7 +246,7 @@ export default function DiaryScreen({ route, navigation }) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
+                style={[styles.modalButton, styles.confirmButton, { backgroundColor: themeColor }]}
                 onPress={addEntry}
               >
                 <Text style={styles.confirmButtonText}>Ajouter</Text>
@@ -224,10 +265,33 @@ export default function DiaryScreen({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.detailTitle}>{selectedEntry?.title || ''}</Text>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle}>{selectedEntry?.title || ''}</Text>
+              {!isEditingEntry && (
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={startEditingEntry}
+                >
+                  <MaterialIcons name="edit" size={20} color={themeColor} />
+                </TouchableOpacity>
+              )}
+            </View>
 
-            {selectedEntry?.description && (
-              <Text style={styles.detailDescription}>{selectedEntry.description}</Text>
+            {isEditingEntry ? (
+              <TextInput
+                style={styles.editDescriptionInput}
+                placeholder="Description (optionnelle)"
+                value={editedDescription}
+                onChangeText={setEditedDescription}
+                multiline
+                numberOfLines={6}
+                maxLength={1000}
+                autoFocus
+              />
+            ) : (
+              selectedEntry?.description && (
+                <Text style={styles.detailDescription}>{selectedEntry.description}</Text>
+              )
             )}
 
             <Text style={styles.detailDate}>
@@ -241,21 +305,39 @@ export default function DiaryScreen({ route, navigation }) {
               })}
             </Text>
 
-            <View style={styles.detailButtons}>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => removeEntry(selectedEntry?.id)}
-              >
-                <MaterialIcons name="delete" size={20} color="#fff" />
-              </TouchableOpacity>
+            {isEditingEntry ? (
+              <View style={styles.detailButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={cancelEditingEntry}
+                >
+                  <Text style={styles.cancelButtonText}>Annuler</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.detailCloseButton}
-                onPress={() => setDetailModalVisible(false)}
-              >
-                <Text style={styles.detailCloseButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.confirmButton, { backgroundColor: themeColor }]}
+                  onPress={saveEditedEntry}
+                >
+                  <Text style={styles.confirmButtonText}>Sauvegarder</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.detailButtons}>
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => removeEntry(selectedEntry?.id)}
+                >
+                  <MaterialIcons name="delete" size={20} color="#fff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.detailCloseButton, { backgroundColor: themeColor }]}
+                  onPress={() => setDetailModalVisible(false)}
+                >
+                  <Text style={styles.detailCloseButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -409,11 +491,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   detailTitle: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#333',
+    flex: 1,
+    marginBottom: 0,
+  },
+  editButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  editDescriptionInput: {
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
     marginBottom: 16,
+    minHeight: 120,
+    textAlignVertical: 'top',
   },
   detailDescription: {
     fontSize: 16,

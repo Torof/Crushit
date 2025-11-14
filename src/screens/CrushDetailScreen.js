@@ -19,7 +19,7 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from '@expo-google-fonts/caveat';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { loadCrushes, saveCrushes, sanitizeInput } from '../utils/storage';
+import { loadCrushes, saveCrushes, sanitizeInput, loadThemeColor, loadBackgroundColor } from '../utils/storage';
 
 const { width } = Dimensions.get('window');
 const SIZE = 60;
@@ -42,8 +42,12 @@ export default function CrushDetailScreen({ route, navigation }) {
   const [actionDescription, setActionDescription] = useState('');
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);
+  const [selectedActionType, setSelectedActionType] = useState(null); // Type of selected action
   const [editDescriptionModalVisible, setEditDescriptionModalVisible] = useState(false);
   const [editedDescription, setEditedDescription] = useState('');
+  const [isEditingAction, setIsEditingAction] = useState(false);
+  const [editedActionTitle, setEditedActionTitle] = useState('');
+  const [editedActionDescription, setEditedActionDescription] = useState('');
   const [animatingDestruction, setAnimatingDestruction] = useState(false);
   const [showPacman, setShowPacman] = useState(false);
   const [eatingHeartIndex, setEatingHeartIndex] = useState(-1);
@@ -60,6 +64,10 @@ export default function CrushDetailScreen({ route, navigation }) {
   // Picture modal state
   const [pictureModalVisible, setPictureModalVisible] = useState(false);
 
+  // Theme color
+  const [themeColor, setThemeColor] = useState('#FF6B9D');
+  const [backgroundColor, setBackgroundColor] = useState('#FFF0F5');
+
   // Double-tap detection for trait flags
   const lastTapRef = useRef(null);
 
@@ -72,7 +80,15 @@ export default function CrushDetailScreen({ route, navigation }) {
 
   useEffect(() => {
     loadCrush();
+    loadColor();
   }, []);
+
+  const loadColor = async () => {
+    const color = await loadThemeColor();
+    setThemeColor(color);
+    const bgColor = await loadBackgroundColor();
+    setBackgroundColor(bgColor);
+  };
 
   // Danger Zone: Pulse animation when only 1 life left
   useEffect(() => {
@@ -285,9 +301,61 @@ export default function CrushDetailScreen({ route, navigation }) {
     setModalVisible(true);
   };
 
-  const viewActionDetails = (action) => {
+  const viewActionDetails = (action, type) => {
     setSelectedAction(action);
+    setSelectedActionType(type);
     setDetailModalVisible(true);
+    setIsEditingAction(false);
+  };
+
+  const startEditingAction = () => {
+    setEditedActionTitle(selectedAction?.title || selectedAction?.text || '');
+    setEditedActionDescription(selectedAction?.description || '');
+    setIsEditingAction(true);
+  };
+
+  const saveEditedAction = async () => {
+    const sanitizedTitle = sanitizeInput(editedActionTitle);
+    const sanitizedDescription = sanitizeInput(editedActionDescription);
+
+    if (sanitizedTitle === '') {
+      Alert.alert('Erreur', 'Veuillez entrer un titre valide');
+      return;
+    }
+
+    try {
+      let updatedCrush = { ...crush };
+
+      if (selectedActionType === 'pro') {
+        updatedCrush.pros = crush.pros.map(pro =>
+          pro.id === selectedAction.id
+            ? { ...pro, title: sanitizedTitle, description: sanitizedDescription }
+            : pro
+        );
+      } else if (selectedActionType === 'con') {
+        updatedCrush.cons = crush.cons.map(con =>
+          con.id === selectedAction.id
+            ? { ...con, title: sanitizedTitle, description: sanitizedDescription }
+            : con
+        );
+      }
+
+      await updateCrush(updatedCrush);
+      setSelectedAction({
+        ...selectedAction,
+        title: sanitizedTitle,
+        description: sanitizedDescription,
+      });
+      setIsEditingAction(false);
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de sauvegarder les modifications');
+    }
+  };
+
+  const cancelEditingAction = () => {
+    setIsEditingAction(false);
+    setEditedActionTitle('');
+    setEditedActionDescription('');
   };
 
   const openEditDescription = () => {
@@ -620,7 +688,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
   if (!crush) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor }]}>
         <Text>Loading...</Text>
       </View>
     );
@@ -657,7 +725,7 @@ export default function CrushDetailScreen({ route, navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor }]}>
       {/* Pacman Animation */}
       {showPacman && (
         <View style={styles.animationContainer}>
@@ -684,6 +752,7 @@ export default function CrushDetailScreen({ route, navigation }) {
       {/* Lives Section */}
       <View style={[
         styles.header,
+        { backgroundColor: themeColor },
         isDestroyed && styles.destroyedHeader,
         crush.mistakes === 4 && styles.dangerZoneHeader
       ]}>
@@ -729,7 +798,7 @@ export default function CrushDetailScreen({ route, navigation }) {
       </View>
 
       {/* Sentiments Section - Separate but connected */}
-      <View style={styles.sentimentsSection}>
+      <View style={[styles.sentimentsSection, { backgroundColor: themeColor }]}>
         {/* Gradient Border */}
         <LinearGradient
           colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.8)', 'rgba(255, 255, 255, 0)']}
@@ -804,7 +873,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               <TouchableOpacity
                 key={con.id}
                 style={[styles.actionItem, styles.badActionItem]}
-                onPress={() => viewActionDetails(con)}
+                onPress={() => viewActionDetails(con, 'con')}
                 onLongPress={() => removeAction(con.id, 'con')}
               >
                 <Text style={styles.actionText}>{con.title || con.text}</Text>
@@ -840,7 +909,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               <TouchableOpacity
                 key={pro.id}
                 style={styles.actionItem}
-                onPress={() => viewActionDetails(pro)}
+                onPress={() => viewActionDetails(pro, 'pro')}
                 onLongPress={() => removeAction(pro.id, 'pro')}
               >
                 <Text style={styles.actionText}>{pro.title || pro.text}</Text>
@@ -1009,29 +1078,86 @@ export default function CrushDetailScreen({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.detailTitle}>
-              {selectedAction?.title || selectedAction?.text || 'Détails de l\'Action'}
-            </Text>
+            <View style={styles.detailHeader}>
+              {isEditingAction ? (
+                <Text style={styles.detailTitle}>Modifier l'Action</Text>
+              ) : (
+                <>
+                  <Text style={styles.detailTitle}>
+                    {selectedAction?.title || selectedAction?.text || 'Détails de l\'Action'}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={startEditingAction}
+                  >
+                    <MaterialIcons name="edit" size={20} color={themeColor} />
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
 
-            {selectedAction?.description && (
-              <Text style={styles.detailDescription}>{selectedAction.description}</Text>
+            {isEditingAction ? (
+              <>
+                <TextInput
+                  style={styles.inputTitle}
+                  placeholder="Titre"
+                  value={editedActionTitle}
+                  onChangeText={setEditedActionTitle}
+                  autoFocus
+                  maxLength={100}
+                />
+
+                <TextInput
+                  style={styles.inputDescription}
+                  placeholder="Description (optionnelle)"
+                  value={editedActionDescription}
+                  onChangeText={setEditedActionDescription}
+                  multiline
+                  numberOfLines={6}
+                  maxLength={500}
+                />
+              </>
+            ) : (
+              <>
+                {selectedAction?.description && (
+                  <Text style={styles.detailDescription}>{selectedAction.description}</Text>
+                )}
+
+                <Text style={styles.detailDate}>
+                  {selectedAction?.createdAt && new Date(selectedAction.createdAt).toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </Text>
+              </>
             )}
 
-            <Text style={styles.detailDate}>
-              {selectedAction?.createdAt && new Date(selectedAction.createdAt).toLocaleDateString('fr-FR', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </Text>
+            {isEditingAction ? (
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={cancelEditingAction}
+                >
+                  <Text style={styles.cancelButtonText}>Annuler</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.detailCloseButton}
-              onPress={() => setDetailModalVisible(false)}
-            >
-              <Text style={styles.detailCloseButtonText}>✕</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.confirmButton, { backgroundColor: themeColor }]}
+                  onPress={saveEditedAction}
+                >
+                  <Text style={styles.confirmButtonText}>Sauvegarder</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.detailCloseButton, { backgroundColor: themeColor }]}
+                onPress={() => setDetailModalVisible(false)}
+              >
+                <Text style={styles.detailCloseButtonText}>✕</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>
@@ -1572,11 +1698,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   detailTitle: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 16,
+    flex: 1,
+    marginBottom: 0,
+  },
+  editButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   detailDescription: {
     fontSize: 16,

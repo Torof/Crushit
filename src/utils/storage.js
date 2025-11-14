@@ -176,3 +176,132 @@ export const clearAllCrushes = async () => {
     throw error;
   }
 };
+
+// Theme color management
+const THEME_COLOR_KEY = '@theme_color';
+const BG_COLOR_KEY = '@background_color';
+const DEFAULT_THEME_COLOR = '#FF6B9D';
+const DEFAULT_BG_COLOR = '#FFF0F5';
+
+export const loadThemeColor = async () => {
+  try {
+    const color = await AsyncStorage.getItem(THEME_COLOR_KEY);
+    return color || DEFAULT_THEME_COLOR;
+  } catch (error) {
+    console.error('Error loading theme color:', error);
+    return DEFAULT_THEME_COLOR;
+  }
+};
+
+export const saveThemeColor = async (color) => {
+  try {
+    await AsyncStorage.setItem(THEME_COLOR_KEY, color);
+  } catch (error) {
+    console.error('Error saving theme color:', error);
+    throw error;
+  }
+};
+
+export const loadBackgroundColor = async () => {
+  try {
+    const color = await AsyncStorage.getItem(BG_COLOR_KEY);
+    return color || DEFAULT_BG_COLOR;
+  } catch (error) {
+    console.error('Error loading background color:', error);
+    return DEFAULT_BG_COLOR;
+  }
+};
+
+export const saveBackgroundColor = async (color) => {
+  try {
+    await AsyncStorage.setItem(BG_COLOR_KEY, color);
+  } catch (error) {
+    console.error('Error saving background color:', error);
+    throw error;
+  }
+};
+
+// Color presets management
+const PRESETS_KEY = '@color_presets';
+
+export const loadColorPresets = async () => {
+  try {
+    const presetsData = await AsyncStorage.getItem(PRESETS_KEY);
+    if (presetsData) {
+      return JSON.parse(presetsData);
+    }
+    return [null, null]; // Default: no presets saved
+  } catch (error) {
+    console.error('Error loading color presets:', error);
+    return [null, null];
+  }
+};
+
+export const saveColorPresets = async (presets) => {
+  try {
+    await AsyncStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+  } catch (error) {
+    console.error('Error saving color presets:', error);
+    throw error;
+  }
+};
+
+// Password management
+const PASSWORD_KEY = '@app_password';
+
+// Simple hash function for password (SHA-256 equivalent using built-in)
+const hashPassword = async (password) => {
+  // Simple hash using string manipulation and character codes
+  let hash = 0;
+  const str = password + 'crush_life_salt_2024'; // Add salt
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+
+  return Math.abs(hash).toString(36);
+};
+
+export const isPasswordSet = async () => {
+  try {
+    const hashedPassword = await AsyncStorage.getItem(PASSWORD_KEY);
+    return hashedPassword !== null;
+  } catch (error) {
+    console.error('Error checking password:', error);
+    return false;
+  }
+};
+
+export const setPassword = async (password) => {
+  try {
+    const hashed = await hashPassword(password);
+    await AsyncStorage.setItem(PASSWORD_KEY, hashed);
+  } catch (error) {
+    console.error('Error setting password:', error);
+    throw error;
+  }
+};
+
+export const verifyPassword = async (password) => {
+  try {
+    const storedHash = await AsyncStorage.getItem(PASSWORD_KEY);
+    if (!storedHash) return false;
+
+    const inputHash = await hashPassword(password);
+    return inputHash === storedHash;
+  } catch (error) {
+    console.error('Error verifying password:', error);
+    return false;
+  }
+};
+
+export const removePassword = async () => {
+  try {
+    await AsyncStorage.removeItem(PASSWORD_KEY);
+  } catch (error) {
+    console.error('Error removing password:', error);
+    throw error;
+  }
+};

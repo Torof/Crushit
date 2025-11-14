@@ -14,8 +14,9 @@ import {
   ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Slider from '@react-native-community/slider';
 import { useFonts, DancingScript_400Regular, DancingScript_700Bold } from '@expo-google-fonts/dancing-script';
-import { loadCrushes, saveCrushes, clearAllCrushes, sanitizeInput } from '../utils/storage';
+import { loadCrushes, saveCrushes, clearAllCrushes, sanitizeInput, loadThemeColor, saveThemeColor, loadBackgroundColor, saveBackgroundColor, loadColorPresets, saveColorPresets, isPasswordSet, setPassword, verifyPassword, removePassword } from '../utils/storage';
 
 export default function CrushListScreen({ navigation }) {
   // Load font
@@ -31,6 +32,23 @@ export default function CrushListScreen({ navigation }) {
   const [archiveModalVisible, setArchiveModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
+
+  // Theme color management
+  const [themeColor, setThemeColor] = useState('#FF6B9D');
+  const [backgroundColor, setBackgroundColor] = useState('#FFF0F5');
+  const [colorPickerVisible, setColorPickerVisible] = useState(false);
+  const [tempR, setTempR] = useState(255);
+  const [tempG, setTempG] = useState(107);
+  const [tempB, setTempB] = useState(157);
+  const [colorPresets, setColorPresets] = useState([null, null]);
+  const [editingColorType, setEditingColorType] = useState('header'); // 'header' or 'background'
+
+  // Password management
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [hasPassword, setHasPassword] = useState(false);
 
   // Easter egg: Secret revival feature
   const [tapCount, setTapCount] = useState(0);
@@ -75,6 +93,9 @@ export default function CrushListScreen({ navigation }) {
   // Add settings icon to navigation header
   useEffect(() => {
     navigation.setOptions({
+      headerStyle: {
+        backgroundColor: themeColor,
+      },
       headerTitle: () => (
         <TouchableOpacity onPress={handleHeaderTap}>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
@@ -92,7 +113,7 @@ export default function CrushListScreen({ navigation }) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, tapCount]);
+  }, [navigation, tapCount, themeColor]);
 
   // Easter egg: Handle header tap for secret revival
   const handleHeaderTap = () => {
@@ -117,6 +138,31 @@ export default function CrushListScreen({ navigation }) {
   const loadData = async () => {
     const data = await loadCrushes();
     setCrushes(data);
+
+    // Load theme color
+    const color = await loadThemeColor();
+    setThemeColor(color);
+
+    // Load background color
+    const bgColor = await loadBackgroundColor();
+    setBackgroundColor(bgColor);
+
+    // Parse RGB from current editing color (default to header)
+    const currentColor = editingColorType === 'header' ? color : bgColor;
+    const r = parseInt(currentColor.slice(1, 3), 16);
+    const g = parseInt(currentColor.slice(3, 5), 16);
+    const b = parseInt(currentColor.slice(5, 7), 16);
+    setTempR(r);
+    setTempG(g);
+    setTempB(b);
+
+    // Load color presets
+    const presets = await loadColorPresets();
+    setColorPresets(presets);
+
+    // Check if password is set
+    const passwordSet = await isPasswordSet();
+    setHasPassword(passwordSet);
   };
 
   const addCrush = async () => {
@@ -191,6 +237,172 @@ export default function CrushListScreen({ navigation }) {
         },
       ]
     );
+  };
+
+  const openColorPicker = () => {
+    setSettingsModalVisible(false);
+    // Load the current editing color into sliders
+    const currentColor = editingColorType === 'header' ? themeColor : backgroundColor;
+    const r = parseInt(currentColor.slice(1, 3), 16);
+    const g = parseInt(currentColor.slice(3, 5), 16);
+    const b = parseInt(currentColor.slice(5, 7), 16);
+    setTempR(r);
+    setTempG(g);
+    setTempB(b);
+    setColorPickerVisible(true);
+  };
+
+  const saveColor = async () => {
+    const r = Math.round(tempR).toString(16).padStart(2, '0');
+    const g = Math.round(tempG).toString(16).padStart(2, '0');
+    const b = Math.round(tempB).toString(16).padStart(2, '0');
+    const newColor = `#${r}${g}${b}`;
+
+    if (editingColorType === 'header') {
+      setThemeColor(newColor);
+      await saveThemeColor(newColor);
+    } else {
+      setBackgroundColor(newColor);
+      await saveBackgroundColor(newColor);
+    }
+    setColorPickerVisible(false);
+  };
+
+  const switchEditingColor = (type) => {
+    setEditingColorType(type);
+    // Load the selected color into sliders
+    const currentColor = type === 'header' ? themeColor : backgroundColor;
+    const r = parseInt(currentColor.slice(1, 3), 16);
+    const g = parseInt(currentColor.slice(3, 5), 16);
+    const b = parseInt(currentColor.slice(5, 7), 16);
+    setTempR(r);
+    setTempG(g);
+    setTempB(b);
+  };
+
+  // Password management functions
+  const openPasswordModal = () => {
+    setSettingsModalVisible(false);
+    setPasswordModalVisible(true);
+  };
+
+  const handlePasswordSubmit = async () => {
+    if (hasPassword) {
+      // Changing password
+      if (currentPassword === '') {
+        Alert.alert('Erreur', 'Veuillez entrer votre mot de passe actuel');
+        return;
+      }
+
+      const isValid = await verifyPassword(currentPassword);
+      if (!isValid) {
+        Alert.alert('Erreur', 'Mot de passe actuel incorrect');
+        return;
+      }
+
+      if (newPassword === '') {
+        // Remove password
+        Alert.alert(
+          'Supprimer le mot de passe',
+          'Êtes-vous sûr de vouloir supprimer le mot de passe ?',
+          [
+            { text: 'Annuler', style: 'cancel' },
+            {
+              text: 'Supprimer',
+              style: 'destructive',
+              onPress: async () => {
+                await removePassword();
+                setHasPassword(false);
+                setCurrentPassword('');
+                setPasswordModalVisible(false);
+                Alert.alert('Succès', 'Mot de passe supprimé');
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      if (newPassword.length < 4) {
+        Alert.alert('Erreur', 'Le nouveau mot de passe doit contenir au moins 4 caractères');
+        return;
+      }
+
+      if (newPassword !== confirmNewPassword) {
+        Alert.alert('Erreur', 'Les nouveaux mots de passe ne correspondent pas');
+        return;
+      }
+
+      await setPassword(newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordModalVisible(false);
+      Alert.alert('Succès', 'Mot de passe modifié avec succès');
+    } else {
+      // Setting new password
+      if (newPassword.length < 4) {
+        Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 4 caractères');
+        return;
+      }
+
+      if (newPassword !== confirmNewPassword) {
+        Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
+        return;
+      }
+
+      await setPassword(newPassword);
+      setHasPassword(true);
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordModalVisible(false);
+      Alert.alert('Succès', 'Mot de passe créé avec succès');
+    }
+  };
+
+  const resetColor = async () => {
+    if (editingColorType === 'header') {
+      const defaultColor = '#FF6B9D';
+      setTempR(255);
+      setTempG(107);
+      setTempB(157);
+      setThemeColor(defaultColor);
+      await saveThemeColor(defaultColor);
+    } else {
+      const defaultBgColor = '#FFF0F5';
+      const r = parseInt(defaultBgColor.slice(1, 3), 16);
+      const g = parseInt(defaultBgColor.slice(3, 5), 16);
+      const b = parseInt(defaultBgColor.slice(5, 7), 16);
+      setTempR(r);
+      setTempG(g);
+      setTempB(b);
+      setBackgroundColor(defaultBgColor);
+      await saveBackgroundColor(defaultBgColor);
+    }
+    setColorPickerVisible(false);
+  };
+
+  const saveCurrentColorToPreset = async (slotIndex) => {
+    const r = Math.round(tempR).toString(16).padStart(2, '0');
+    const g = Math.round(tempG).toString(16).padStart(2, '0');
+    const b = Math.round(tempB).toString(16).padStart(2, '0');
+    const currentColor = `#${r}${g}${b}`;
+
+    const newPresets = [...colorPresets];
+    newPresets[slotIndex] = currentColor;
+    setColorPresets(newPresets);
+    await saveColorPresets(newPresets);
+  };
+
+  const loadPresetColor = (presetColor) => {
+    if (!presetColor) return;
+
+    const r = parseInt(presetColor.slice(1, 3), 16);
+    const g = parseInt(presetColor.slice(3, 5), 16);
+    const b = parseInt(presetColor.slice(5, 7), 16);
+    setTempR(r);
+    setTempG(g);
+    setTempB(b);
   };
 
   // Easter egg: Relationship Oracle
@@ -548,7 +760,7 @@ export default function CrushListScreen({ navigation }) {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor }]}>
       {/* Reorder Mode Banner */}
       {reorderMode && (
         <View style={styles.reorderBanner}>
@@ -585,7 +797,7 @@ export default function CrushListScreen({ navigation }) {
 
       {/* Floating Add Button */}
       <TouchableOpacity
-        style={styles.floatingButton}
+        style={[styles.floatingButton, { backgroundColor: themeColor }]}
         onPress={() => setModalVisible(true)}
         onLongPress={openOracle}
         testID="open-add-modal-button"
@@ -768,6 +980,29 @@ export default function CrushListScreen({ navigation }) {
 
             <TouchableOpacity
               style={styles.settingsOption}
+              onPress={openColorPicker}
+            >
+              <Text style={styles.settingsOptionIcon}>🎨</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={styles.settingsOptionTitle}>Couleur</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingsOption}
+              onPress={openPasswordModal}
+            >
+              <Text style={styles.settingsOptionIcon}>🔒</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={styles.settingsOptionTitle}>Mot de passe</Text>
+                {hasPassword && (
+                  <Text style={styles.settingsOptionSubtitle}>Protection activée</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingsOption}
               onPress={() => {
                 setSettingsModalVisible(false);
                 clearAllData();
@@ -853,6 +1088,232 @@ export default function CrushListScreen({ navigation }) {
             >
               <Text style={styles.settingsCloseButtonText}>✕</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Color Picker Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={colorPickerVisible}
+        onRequestClose={() => setColorPickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.colorPickerModal}>
+            <Text style={styles.modalTitle}>Choisir la couleur</Text>
+
+            <View style={styles.colorPreviewContainer}>
+              <View style={[
+                styles.colorPreview,
+                { backgroundColor: `rgb(${Math.round(tempR)}, ${Math.round(tempG)}, ${Math.round(tempB)})` }
+              ]} />
+            </View>
+
+            {/* Color Presets */}
+            <View style={styles.presetsSection}>
+              <Text style={styles.presetsTitle}>Préréglages</Text>
+              <View style={styles.presetsContainer}>
+                {[0, 1].map((index) => (
+                  <View key={index} style={styles.presetSlot}>
+                    <TouchableOpacity
+                      style={[
+                        styles.presetCircle,
+                        { backgroundColor: colorPresets[index] || '#E0E0E0' }
+                      ]}
+                      onPress={() => loadPresetColor(colorPresets[index])}
+                      onLongPress={() => saveCurrentColorToPreset(index)}
+                      delayLongPress={500}
+                    >
+                      {!colorPresets[index] && (
+                        <Text style={styles.emptyPresetText}>+</Text>
+                      )}
+                    </TouchableOpacity>
+                    <Text style={styles.presetLabel}>Slot {index + 1}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.presetsHint}>Appui long pour sauvegarder la couleur actuelle</Text>
+            </View>
+
+            {/* Color Type Selection */}
+            <View style={styles.colorTypeSection}>
+              <Text style={styles.colorTypeTitle}>Couleur à modifier:</Text>
+              <View style={styles.colorTypeOptions}>
+                <TouchableOpacity
+                  style={styles.colorTypeOption}
+                  onPress={() => switchEditingColor('header')}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    editingColorType === 'header' && styles.checkboxChecked
+                  ]}>
+                    {editingColorType === 'header' && (
+                      <Text style={styles.checkmark}>✓</Text>
+                    )}
+                  </View>
+                  <Text style={styles.colorTypeLabel}>En-tête</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.colorTypeOption}
+                  onPress={() => switchEditingColor('background')}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    editingColorType === 'background' && styles.checkboxChecked
+                  ]}>
+                    {editingColorType === 'background' && (
+                      <Text style={styles.checkmark}>✓</Text>
+                    )}
+                  </View>
+                  <Text style={styles.colorTypeLabel}>Arrière-plan</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.sliderContainer}>
+              <View style={styles.sliderRow}>
+                <Text style={styles.sliderLabel}>Rouge:</Text>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={0}
+                  maximumValue={255}
+                  value={tempR}
+                  onValueChange={setTempR}
+                  minimumTrackTintColor="#FF0000"
+                  maximumTrackTintColor="#DDD"
+                />
+                <Text style={styles.sliderValue}>{Math.round(tempR)}</Text>
+              </View>
+
+              <View style={styles.sliderRow}>
+                <Text style={styles.sliderLabel}>Vert:</Text>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={0}
+                  maximumValue={255}
+                  value={tempG}
+                  onValueChange={setTempG}
+                  minimumTrackTintColor="#00FF00"
+                  maximumTrackTintColor="#DDD"
+                />
+                <Text style={styles.sliderValue}>{Math.round(tempG)}</Text>
+              </View>
+
+              <View style={styles.sliderRow}>
+                <Text style={styles.sliderLabel}>Bleu:</Text>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={0}
+                  maximumValue={255}
+                  value={tempB}
+                  onValueChange={setTempB}
+                  minimumTrackTintColor="#0000FF"
+                  maximumTrackTintColor="#DDD"
+                />
+                <Text style={styles.sliderValue}>{Math.round(tempB)}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.resetButton}
+              onPress={resetColor}
+            >
+              <Text style={styles.resetButtonText}>↻ Réinitialiser à la couleur d'origine</Text>
+            </TouchableOpacity>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setColorPickerVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={saveColor}
+              >
+                <Text style={styles.confirmButtonText}>Sauvegarder</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Password Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={passwordModalVisible}
+        onRequestClose={() => setPasswordModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {hasPassword ? 'Gérer le mot de passe' : 'Créer un mot de passe'}
+            </Text>
+
+            {hasPassword && (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Mot de passe actuel"
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={styles.passwordHint}>
+                  Laissez le nouveau mot de passe vide pour supprimer la protection
+                </Text>
+              </>
+            )}
+
+            <TextInput
+              style={styles.input}
+              placeholder="Nouveau mot de passe"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Confirmer le nouveau mot de passe"
+              value={confirmNewPassword}
+              onChangeText={setConfirmNewPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                  setPasswordModalVisible(false);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton, { backgroundColor: themeColor }]}
+                onPress={handlePasswordSubmit}
+              >
+                <Text style={styles.confirmButtonText}>
+                  {hasPassword ? 'Modifier' : 'Créer'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1050,6 +1511,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  passwordHint: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 12,
+    fontStyle: 'italic',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1336,5 +1803,157 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     fontStyle: 'italic',
+  },
+  // Color picker styles
+  colorPickerModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+  },
+  colorPreviewContainer: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  colorPreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: '#DDD',
+  },
+  sliderContainer: {
+    marginBottom: 20,
+  },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sliderLabel: {
+    width: 60,
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '600',
+  },
+  slider: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  sliderValue: {
+    width: 40,
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'right',
+  },
+  resetButton: {
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+  },
+  resetButtonText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  // Presets styles
+  presetsSection: {
+    marginVertical: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  presetsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  presetsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    marginBottom: 8,
+  },
+  presetSlot: {
+    alignItems: 'center',
+  },
+  presetCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: '#CCC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  emptyPresetText: {
+    fontSize: 32,
+    color: '#999',
+    fontWeight: '300',
+  },
+  presetLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  presetsHint: {
+    fontSize: 11,
+    color: '#999',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  // Color type selection styles
+  colorTypeSection: {
+    marginVertical: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  colorTypeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  colorTypeOptions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  colorTypeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#999',
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#FF6B9D',
+    borderColor: '#FF6B9D',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  colorTypeLabel: {
+    fontSize: 15,
+    color: '#333',
   },
 });
