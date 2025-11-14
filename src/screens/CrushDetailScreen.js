@@ -90,18 +90,24 @@ export default function CrushDetailScreen({ route, navigation }) {
     }
   }, [crush?.mistakes]);
 
-  // Add status button to navigation header
+  // Add status button and diary button to navigation header
   useEffect(() => {
     if (crush && crush.mistakes < 5) {
       navigation.setOptions({
         title: crush.name,
         headerRight: () => (
-          <TouchableOpacity
-            style={{ marginRight: 15 }}
-            onPress={() => setStatusModalVisible(true)}
-          >
-            <MaterialIcons name="more-vert" size={24} color="#fff" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15, marginRight: 15 }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Diary', { crushId: crush.id })}
+            >
+              <MaterialIcons name="book" size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setStatusModalVisible(true)}
+            >
+              <MaterialIcons name="more-vert" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
         ),
       });
     } else if (crush) {

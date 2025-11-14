@@ -26,6 +26,7 @@ const isValidCrush = (crush) => {
   if (crush.feelings !== undefined && (typeof crush.feelings !== 'number' || crush.feelings < 0 || crush.feelings > 100)) return false;
   if (crush.order !== undefined && typeof crush.order !== 'number') return false;
   if (crush.status !== undefined && !['active', 'ended', 'standby'].includes(crush.status)) return false;
+  if (crush.diaryEntries && !Array.isArray(crush.diaryEntries)) return false;
 
   // Validate pros and cons
   for (const pro of crush.pros) {
@@ -51,6 +52,15 @@ const isValidCrush = (crush) => {
     }
   }
 
+  // Validate diary entries (if present)
+  if (crush.diaryEntries) {
+    for (const entry of crush.diaryEntries) {
+      if (!entry.id || !entry.title || entry.title.length > 100) return false;
+      if (entry.description && entry.description.length > 1000) return false;
+      if (!entry.createdAt || isNaN(Date.parse(entry.createdAt))) return false;
+    }
+  }
+
   return true;
 };
 
@@ -63,6 +73,7 @@ const migrateCrush = (crush, index) => {
     feelings: crush.feelings !== undefined ? crush.feelings : 50,
     order: crush.order !== undefined ? crush.order : index,
     status: crush.status || 'active', // active, ended, or standby
+    diaryEntries: crush.diaryEntries || [],
   };
 };
 
