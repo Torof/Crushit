@@ -27,6 +27,7 @@ export default function CrushListScreen({ navigation }) {
   const [newCrushName, setNewCrushName] = useState('');
   const [newCrushDescription, setNewCrushDescription] = useState('');
   const [cemeteryModalVisible, setCemeteryModalVisible] = useState(false);
+  const [archiveModalVisible, setArchiveModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const [draggingId, setDraggingId] = useState(null);
@@ -89,6 +90,7 @@ export default function CrushListScreen({ navigation }) {
         defects: [],
         feelings: 50, // Start at 50% (neutral)
         order: crushes.length, // Add at the end
+        status: 'active', // active, ended, or standby
         createdAt: new Date().toISOString(),
       };
 
@@ -178,8 +180,9 @@ export default function CrushListScreen({ navigation }) {
     return '#FF6B9D';
   };
 
-  // Separate active and destroyed crushes
-  const activeCrushes = crushes.filter(c => c.mistakes < 5);
+  // Separate crushes by status
+  const activeCrushes = crushes.filter(c => c.mistakes < 5 && (!c.status || c.status === 'active'));
+  const archivedCrushes = crushes.filter(c => c.mistakes < 5 && (c.status === 'ended' || c.status === 'standby'));
   const destroyedCrushes = crushes.filter(c => c.mistakes >= 5);
 
   const renderCrush = ({ item }) => {
@@ -216,6 +219,29 @@ export default function CrushListScreen({ navigation }) {
       >
         <Text style={styles.cemeteryName}>☠️ {item.name}</Text>
         <Text style={styles.cemeteryDate}>
+          {new Date(item.createdAt).toLocaleDateString('fr-FR')}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderArchivedCrush = ({ item }) => {
+    const statusIcon = item.status === 'ended' ? '💔' : '⏸️';
+    const statusText = item.status === 'ended' ? 'Terminé' : 'En pause';
+
+    return (
+      <TouchableOpacity
+        style={styles.archiveItem}
+        onPress={() => {
+          setArchiveModalVisible(false);
+          navigation.navigate('CrushDetail', { crushId: item.id });
+        }}
+      >
+        <View style={styles.archiveItemContent}>
+          <Text style={styles.archiveName}>{statusIcon} {item.name}</Text>
+          <Text style={styles.archiveStatus}>{statusText}</Text>
+        </View>
+        <Text style={styles.archiveDate}>
           {new Date(item.createdAt).toLocaleDateString('fr-FR')}
         </Text>
       </TouchableOpacity>
@@ -351,41 +377,15 @@ export default function CrushListScreen({ navigation }) {
         />
       )}
 
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomNavBar}>
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => setCemeteryModalVisible(true)}
-        >
-          <View>
-            <Text style={styles.navIcon}>🪦</Text>
-            {destroyedCrushes.length > 0 && (
-              <View style={styles.navBadge}>
-                <Text style={styles.navBadgeText}>{destroyedCrushes.length}</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.navLabel}>Cimetière</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.navButton, styles.navButtonPrimary]}
-          onPress={() => setModalVisible(true)}
-          testID="open-add-modal-button"
-          accessibilityLabel="Ouvrir le formulaire d'ajout"
-        >
-          <Text style={styles.navIconLarge}>+</Text>
-          <Text style={[styles.navLabel, styles.navLabelWhite]}>Ajouter</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={clearAllData}
-        >
-          <Text style={styles.navIcon}>🗑️</Text>
-          <Text style={styles.navLabel}>Effacer</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Floating Add Button */}
+      <TouchableOpacity
+        style={styles.floatingButton}
+        onPress={() => setModalVisible(true)}
+        testID="open-add-modal-button"
+        accessibilityLabel="Ouvrir le formulaire d'ajout"
+      >
+        <Text style={styles.floatingButtonText}>+</Text>
+      </TouchableOpacity>
 
       <Modal
         animationType="slide"
@@ -474,6 +474,39 @@ export default function CrushListScreen({ navigation }) {
         </View>
       </Modal>
 
+      {/* Archive Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={archiveModalVisible}
+        onRequestClose={() => setArchiveModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.archiveModal]}>
+            <Text style={styles.modalTitle}>📁 Archive des Relations</Text>
+
+            <FlatList
+              data={archivedCrushes}
+              renderItem={renderArchivedCrush}
+              keyExtractor={item => item.id}
+              style={styles.archiveList}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>Aucune relation archivée</Text>
+                </View>
+              }
+            />
+
+            <TouchableOpacity
+              style={[styles.modalButton, styles.confirmButton, styles.closeCemeteryButton]}
+              onPress={() => setArchiveModalVisible(false)}
+            >
+              <Text style={styles.confirmButtonText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Settings Modal */}
       <Modal
         animationType="fade"
@@ -487,10 +520,44 @@ export default function CrushListScreen({ navigation }) {
 
             <TouchableOpacity
               style={styles.settingsOption}
+              onPress={() => {
+                setSettingsModalVisible(false);
+                setCemeteryModalVisible(true);
+              }}
+            >
+              <Text style={styles.settingsOptionIcon}>🪦</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={styles.settingsOptionTitle}>Cimetière</Text>
+                {destroyedCrushes.length > 0 && (
+                  <Text style={styles.settingsOptionSubtitle}>{destroyedCrushes.length} crush{destroyedCrushes.length > 1 ? 'es' : ''} game over</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingsOption}
+              onPress={() => {
+                setSettingsModalVisible(false);
+                setArchiveModalVisible(true);
+              }}
+            >
+              <Text style={styles.settingsOptionIcon}>📁</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={styles.settingsOptionTitle}>Archive</Text>
+                {archivedCrushes.length > 0 && (
+                  <Text style={styles.settingsOptionSubtitle}>{archivedCrushes.length} relation{archivedCrushes.length > 1 ? 's' : ''} archivée{archivedCrushes.length > 1 ? 's' : ''}</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingsOption}
               onPress={toggleReorderMode}
             >
               <Text style={styles.settingsOptionIcon}>↕️</Text>
-              <Text style={styles.settingsOptionTitle}>Réorganiser</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={styles.settingsOptionTitle}>Réorganiser</Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -501,7 +568,9 @@ export default function CrushListScreen({ navigation }) {
               }}
             >
               <Text style={styles.settingsOptionIcon}>🗑️</Text>
-              <Text style={[styles.settingsOptionTitle, styles.dangerText]}>Effacer</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={[styles.settingsOptionTitle, styles.dangerText]}>Effacer</Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -525,7 +594,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 90,
+    paddingBottom: 100,
   },
   crushCard: {
     backgroundColor: '#fff',
@@ -630,11 +699,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
   },
   settingsOptionSubtitle: {
     fontSize: 14,
     color: '#666',
+    marginTop: 4,
   },
   dangerText: {
     color: '#FF4444',
@@ -761,63 +830,66 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
   },
-  bottomNavBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    paddingBottom: 10,
-    paddingTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 10,
+  archiveModal: {
+    height: '70%',
+    maxHeight: 500,
   },
-  navButton: {
+  archiveList: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
+    width: '100%',
+    marginVertical: 10,
   },
-  navButtonPrimary: {
-    backgroundColor: '#FF6B9D',
-    marginHorizontal: 10,
+  archiveItem: {
+    backgroundColor: '#F5F5F5',
+    padding: 16,
     borderRadius: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
   },
-  navIcon: {
-    fontSize: 26,
+  archiveItemContent: {
+    flex: 1,
+  },
+  archiveName: {
+    fontSize: 18,
+    color: '#333',
+    fontWeight: 'bold',
     marginBottom: 4,
   },
-  navIconLarge: {
-    fontSize: 32,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  navLabel: {
-    fontSize: 12,
+  archiveStatus: {
+    fontSize: 14,
     color: '#666',
-    fontWeight: '600',
+    fontStyle: 'italic',
   },
-  navLabelWhite: {
-    color: '#fff',
+  archiveDate: {
+    fontSize: 14,
+    color: '#999',
+    marginLeft: 12,
   },
-  navBadge: {
+  floatingButton: {
     position: 'absolute',
-    top: -5,
-    right: -10,
-    backgroundColor: '#FF4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    bottom: 30,
+    right: 20,
+    backgroundColor: '#FF6B9D',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
-  navBadgeText: {
-    fontSize: 11,
+  floatingButtonText: {
+    fontSize: 40,
     color: '#fff',
     fontWeight: 'bold',
+    lineHeight: 40,
   },
   reorderModal: {
     height: '70%',

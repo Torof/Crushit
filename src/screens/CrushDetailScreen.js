@@ -52,6 +52,9 @@ export default function CrushDetailScreen({ route, navigation }) {
   const [traitType, setTraitType] = useState(null); // 'quality' or 'defect'
   const [traitText, setTraitText] = useState('');
 
+  // Status modal state
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+
   // Animated values using useRef
   const pacmanX = useRef(new Animated.Value(-100)).current;
   const pacmanMouth = useRef(new Animated.Value(0)).current;
@@ -62,12 +65,30 @@ export default function CrushDetailScreen({ route, navigation }) {
     loadCrush();
   }, []);
 
+  // Add status button to navigation header
+  useEffect(() => {
+    if (crush && crush.mistakes < 5) {
+      navigation.setOptions({
+        title: crush.name,
+        headerRight: () => (
+          <TouchableOpacity
+            style={{ marginRight: 15 }}
+            onPress={() => setStatusModalVisible(true)}
+          >
+            <MaterialIcons name="more-vert" size={24} color="#fff" />
+          </TouchableOpacity>
+        ),
+      });
+    } else if (crush) {
+      navigation.setOptions({ title: crush.name });
+    }
+  }, [navigation, crush]);
+
   const loadCrush = async () => {
     const crushes = await loadCrushes();
     const foundCrush = crushes.find(c => c.id === crushId);
     if (foundCrush) {
       setCrush(foundCrush);
-      navigation.setOptions({ title: foundCrush.name });
     }
   };
 
@@ -213,6 +234,36 @@ export default function CrushDetailScreen({ route, navigation }) {
       setEditDescriptionModalVisible(false);
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de sauvegarder la description');
+    }
+  };
+
+  const changeStatus = async (newStatus) => {
+    try {
+      const updatedCrush = {
+        ...crush,
+        status: newStatus,
+      };
+      await updateCrush(updatedCrush);
+      setStatusModalVisible(false);
+
+      // Show confirmation message
+      const statusMessages = {
+        active: 'Relation marquée comme active',
+        ended: 'Relation marquée comme terminée',
+        standby: 'Relation mise en pause',
+      };
+      Alert.alert('Statut mis à jour', statusMessages[newStatus], [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (newStatus === 'ended' || newStatus === 'standby') {
+              navigation.goBack();
+            }
+          },
+        },
+      ]);
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de mettre à jour le statut');
     }
   };
 
@@ -864,6 +915,60 @@ export default function CrushDetailScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Status Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={statusModalVisible}
+        onRequestClose={() => setStatusModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.settingsModalContent}>
+            <Text style={styles.modalTitle}>Changer le statut</Text>
+
+            <TouchableOpacity
+              style={styles.statusOption}
+              onPress={() => changeStatus('active')}
+            >
+              <Text style={styles.statusOptionIcon}>✅</Text>
+              <View style={styles.statusOptionTextContainer}>
+                <Text style={styles.statusOptionTitle}>Actif</Text>
+                <Text style={styles.statusOptionSubtitle}>Relation en cours</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.statusOption}
+              onPress={() => changeStatus('ended')}
+            >
+              <Text style={styles.statusOptionIcon}>💔</Text>
+              <View style={styles.statusOptionTextContainer}>
+                <Text style={styles.statusOptionTitle}>Terminé</Text>
+                <Text style={styles.statusOptionSubtitle}>La relation est finie</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.statusOption}
+              onPress={() => changeStatus('standby')}
+            >
+              <Text style={styles.statusOptionIcon}>⏸️</Text>
+              <View style={styles.statusOptionTextContainer}>
+                <Text style={styles.statusOptionTitle}>En pause</Text>
+                <Text style={styles.statusOptionSubtitle}>Relation en standby</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalButton, styles.confirmButton, styles.closeButton]}
+              onPress={() => setStatusModalVisible(false)}
+            >
+              <Text style={styles.confirmButtonText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1308,5 +1413,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#333',
+  },
+  settingsModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  statusOptionIcon: {
+    fontSize: 32,
+    marginRight: 16,
+  },
+  statusOptionTextContainer: {
+    flex: 1,
+  },
+  statusOptionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  statusOptionSubtitle: {
+    fontSize: 14,
+    color: '#666',
   },
 });
