@@ -60,10 +60,35 @@ export default function CrushDetailScreen({ route, navigation }) {
   const pacmanMouth = useRef(new Animated.Value(0)).current;
   const heartScale = useRef(new Animated.Value(1)).current;
   const heartRotation = useRef(new Animated.Value(0)).current;
+  const dangerPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     loadCrush();
   }, []);
+
+  // Danger Zone: Pulse animation when only 1 life left
+  useEffect(() => {
+    if (crush && crush.mistakes === 4) {
+      // Start pulsing animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(dangerPulse, {
+            toValue: 1.15,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(dangerPulse, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      // Stop animation
+      dangerPulse.setValue(1);
+    }
+  }, [crush?.mistakes]);
 
   // Add status button to navigation header
   useEffect(() => {
@@ -238,6 +263,34 @@ export default function CrushDetailScreen({ route, navigation }) {
   };
 
   const changeStatus = async (newStatus) => {
+    // Easter egg: Custom alert when changing from standby to active
+    if (crush.status === 'standby' && newStatus === 'active') {
+      Alert.alert(
+        'Confirmation',
+        "T'es sûr(e) de ton coup là ?",
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Oui',
+            onPress: async () => {
+              try {
+                const updatedCrush = {
+                  ...crush,
+                  status: newStatus,
+                };
+                await updateCrush(updatedCrush);
+                setStatusModalVisible(false);
+                Alert.alert('Statut mis à jour', 'Relation marquée comme active');
+              } catch (error) {
+                Alert.alert('Erreur', 'Impossible de mettre à jour le statut');
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     try {
       const updatedCrush = {
         ...crush,
@@ -491,7 +544,11 @@ export default function CrushDetailScreen({ route, navigation }) {
       )}
 
       {/* Lives Section */}
-      <View style={[styles.header, isDestroyed && styles.destroyedHeader]}>
+      <View style={[
+        styles.header,
+        isDestroyed && styles.destroyedHeader,
+        crush.mistakes === 4 && styles.dangerZoneHeader
+      ]}>
         {isDestroyed && (
           <Text style={styles.headerTitle}>☠️ GAME OVER ☠️</Text>
         )}
@@ -501,12 +558,17 @@ export default function CrushDetailScreen({ route, navigation }) {
           ) : (
             [...Array(5)].map((_, index) => {
               const isBeingEaten = index === eatingHeartIndex;
-              // Show heart as full while Pac-Man is moving towards it (isAnimatingHeart is true)
-              // Once Pac-Man reaches it, isAnimatingHeart becomes false and the heart can change
               const showAsHeart = isBeingEaten && isAnimatingHeart ? true : index < livesLeft;
+              const isLastHeart = crush.mistakes === 4 && index === 0; // Last remaining heart
+
               return (
                 <Animated.Text
                   key={index}
+                  onLongPress={() => {
+                    if (isLastHeart) {
+                      Alert.alert('⚠️ Danger Zone', 'Attention, c\'est la dernière chance...');
+                    }
+                  }}
                   style={[
                     styles.heartIconLarge,
                     isBeingEaten && !isAnimatingHeart && {
@@ -514,6 +576,9 @@ export default function CrushDetailScreen({ route, navigation }) {
                         { scale: heartScale },
                         { rotate: heartRotationDeg },
                       ],
+                    },
+                    isLastHeart && {
+                      transform: [{ scale: dangerPulse }],
                     },
                   ]}
                 >
@@ -931,10 +996,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               onPress={() => changeStatus('active')}
             >
               <Text style={styles.statusOptionIcon}>✅</Text>
-              <View style={styles.statusOptionTextContainer}>
-                <Text style={styles.statusOptionTitle}>Actif</Text>
-                <Text style={styles.statusOptionSubtitle}>Relation en cours</Text>
-              </View>
+              <Text style={styles.statusOptionTitle}>Actif</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -942,10 +1004,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               onPress={() => changeStatus('ended')}
             >
               <Text style={styles.statusOptionIcon}>💔</Text>
-              <View style={styles.statusOptionTextContainer}>
-                <Text style={styles.statusOptionTitle}>Terminé</Text>
-                <Text style={styles.statusOptionSubtitle}>La relation est finie</Text>
-              </View>
+              <Text style={styles.statusOptionTitle}>Terminé</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -953,10 +1012,35 @@ export default function CrushDetailScreen({ route, navigation }) {
               onPress={() => changeStatus('standby')}
             >
               <Text style={styles.statusOptionIcon}>⏸️</Text>
-              <View style={styles.statusOptionTextContainer}>
-                <Text style={styles.statusOptionTitle}>En pause</Text>
-                <Text style={styles.statusOptionSubtitle}>Relation en standby</Text>
-              </View>
+              <Text style={styles.statusOptionTitle}>En pause</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.statusOption}
+              onPress={() => {
+                Alert.alert(
+                  'Confirmer Game Over',
+                  'Êtes-vous sûr de vouloir envoyer cette personne au cimetière ? Cette action ne peut pas être annulée.',
+                  [
+                    { text: 'Annuler', style: 'cancel' },
+                    {
+                      text: 'Confirmer',
+                      style: 'destructive',
+                      onPress: async () => {
+                        const updatedCrush = {
+                          ...crush,
+                          mistakes: 5,
+                        };
+                        await updateCrush(updatedCrush);
+                        setStatusModalVisible(false);
+                      },
+                    },
+                  ]
+                );
+              }}
+            >
+              <Text style={styles.statusOptionIcon}>☠️</Text>
+              <Text style={[styles.statusOptionTitle, styles.dangerText]}>Game Over</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -984,6 +1068,9 @@ const styles = StyleSheet.create({
   },
   destroyedHeader: {
     backgroundColor: '#333',
+  },
+  dangerZoneHeader: {
+    backgroundColor: '#8B0000',
   },
   headerTitle: {
     fontSize: 24,
@@ -1464,5 +1551,8 @@ const styles = StyleSheet.create({
   statusOptionSubtitle: {
     fontSize: 14,
     color: '#666',
+  },
+  dangerText: {
+    color: '#FF4444',
   },
 });

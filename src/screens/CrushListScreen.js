@@ -13,6 +13,7 @@ import {
   LayoutAnimation,
   ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts, DancingScript_400Regular, DancingScript_700Bold } from '@expo-google-fonts/dancing-script';
 import { loadCrushes, saveCrushes, clearAllCrushes, sanitizeInput } from '../utils/storage';
 
@@ -30,6 +31,15 @@ export default function CrushListScreen({ navigation }) {
   const [archiveModalVisible, setArchiveModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
+
+  // Easter egg: Secret revival feature
+  const [tapCount, setTapCount] = useState(0);
+  const [revivalModalVisible, setRevivalModalVisible] = useState(false);
+  const [revivalCount, setRevivalCount] = useState(0);
+
+  // Easter egg: Relationship Oracle
+  const [oracleModalVisible, setOracleModalVisible] = useState(false);
+  const [oracleMessage, setOracleMessage] = useState('');
   const [draggingId, setDraggingId] = useState(null);
   const [dragOrder, setDragOrder] = useState([]);
   const [hoverIndex, setHoverIndex] = useState(null);
@@ -41,7 +51,19 @@ export default function CrushListScreen({ navigation }) {
 
   useEffect(() => {
     loadData();
+    loadRevivalCount();
   }, []);
+
+  const loadRevivalCount = async () => {
+    try {
+      const count = await AsyncStorage.getItem('@revival_count');
+      if (count) {
+        setRevivalCount(parseInt(count));
+      }
+    } catch (error) {
+      console.error('Error loading revival count:', error);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -53,6 +75,13 @@ export default function CrushListScreen({ navigation }) {
   // Add settings icon to navigation header
   useEffect(() => {
     navigation.setOptions({
+      headerTitle: () => (
+        <TouchableOpacity onPress={handleHeaderTap}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
+            💕 Vie des Crush
+          </Text>
+        </TouchableOpacity>
+      ),
       headerRight: () => (
         <TouchableOpacity
           style={{ marginRight: 15 }}
@@ -62,7 +91,27 @@ export default function CrushListScreen({ navigation }) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, tapCount]);
+
+  // Easter egg: Handle header tap for secret revival
+  const handleHeaderTap = () => {
+    const newCount = tapCount + 1;
+    setTapCount(newCount);
+
+    if (newCount === 7) {
+      setTapCount(0); // Reset counter
+      if (destroyedCrushes.length > 0) {
+        setRevivalModalVisible(true);
+      } else {
+        Alert.alert('Secret découvert !', 'Mais il n\'y a personne dans le cimetière...');
+      }
+    }
+
+    // Reset counter after 2 seconds of inactivity
+    setTimeout(() => {
+      setTapCount(0);
+    }, 2000);
+  };
 
   const loadData = async () => {
     const data = await loadCrushes();
@@ -141,6 +190,162 @@ export default function CrushListScreen({ navigation }) {
         },
       ]
     );
+  };
+
+  // Easter egg: Relationship Oracle
+  const openOracle = () => {
+    if (crushes.length === 0) {
+      Alert.alert('🔮 Oracle', 'Ajoute des crushes d\'abord !');
+      return;
+    }
+
+    // Calculate stats
+    const activeCount = activeCrushes.length;
+    const archivedCount = archivedCrushes.length;
+    const destroyedCount = destroyedCrushes.length;
+    const total = crushes.length;
+
+    // Calculate average feelings
+    const crushesWithFeelings = crushes.filter(c => c.mistakes < 5);
+    const avgFeelings = crushesWithFeelings.length > 0
+      ? crushesWithFeelings.reduce((sum, c) => sum + (c.feelings ?? 50), 0) / crushesWithFeelings.length
+      : 50;
+
+    // Count qualities vs defects
+    const totalQualities = crushes.reduce((sum, c) => sum + (c.qualities?.length || 0), 0);
+    const totalDefects = crushes.reduce((sum, c) => sum + (c.defects?.length || 0), 0);
+
+    // Count good vs bad actions
+    const totalGoodActions = crushes.reduce((sum, c) => sum + (c.pros?.length || 0), 0);
+    const totalBadActions = crushes.reduce((sum, c) => sum + (c.cons?.length || 0), 0);
+
+    // Cemetery rate
+    const cemeteryRate = destroyedCount > 0 ? Math.round((destroyedCount / total) * 100) : 0;
+
+    // Generate messages based on stats
+    const messages = [
+      // Feelings-based
+      avgFeelings > 70 ? "Niveau de sentiments élevé ! T'es plutôt optimiste 💕" : null,
+      avgFeelings < 30 ? "Niveau de sentiments bas... Faut peut-être faire le tri ? 😅" : null,
+      avgFeelings >= 80 ? "80%+ de sentiments ? Tu planes complètement ! ☁️" : null,
+      avgFeelings >= 50 && avgFeelings <= 55 ? "Pile au milieu... T'es neutre ou indécis(e) ? 🤷" : null,
+      avgFeelings < 40 && total >= 3 ? "Sentiments faibles partout... Ça va ? 🥺" : null,
+
+      // Qualities vs Defects
+      totalQualities > totalDefects * 2 ? "Beaucoup plus de qualités que de défauts, bon œil ! ✨" : null,
+      totalDefects > totalQualities * 2 ? "Plus de défauts que de qualités... Exigeant(e) ou réaliste ? 🤔" : null,
+      totalQualities === totalDefects && totalQualities > 0 ? "Parfait équilibre qualités/défauts. Philosophe ? ⚖️" : null,
+      totalQualities === 0 && totalDefects === 0 && total >= 2 ? "Aucune qualité ni défaut notés ? Mystérieux... 🕵️" : null,
+      totalQualities > 20 ? "Plus de 20 qualités notées ! T'es fan de tout le monde 😍" : null,
+      totalDefects > 20 ? "Plus de 20 défauts... T'as un œil critique hein 👁️" : null,
+      totalQualities > 0 && totalDefects === 0 ? "Que des qualités, aucun défaut ? Bisounours ! 🦄" : null,
+      totalDefects > 0 && totalQualities === 0 ? "Que des défauts ? Pessimiste du jour ! 😈" : null,
+
+      // Cemetery stats
+      destroyedCount === 0 && total >= 3 ? "Aucun game over ! Champion(ne) de la patience 🏆" : null,
+      destroyedCount >= 3 ? `${destroyedCount} au cimetière... Aïe aïe aïe 😅` : null,
+      cemeteryRate >= 50 && total >= 4 ? `${cemeteryRate}% de taux de game over... C'est corsé ! 💀` : null,
+      destroyedCount === 1 && total > 5 ? "Un seul au cimetière sur beaucoup... Pas mal ! 👍" : null,
+      destroyedCount >= 5 ? `${destroyedCount} game over... C'est un massacre ! 🏴‍☠️` : null,
+      destroyedCount === total && total >= 2 ? "Tous au cimetière... T'es maudit(e) ou quoi ? 💀" : null,
+
+      // Active vs Archived
+      archivedCount > activeCount && archivedCount >= 2 ? "Plus de relations en pause qu'actives... On prend son temps ! ⏸️" : null,
+      activeCount >= 5 ? "5+ relations actives ? T'es ambitieux(se) ! 🎯" : null,
+      activeCount === 0 && archivedCount > 0 ? "Aucune relation active ? C'est la pause générale ! 💤" : null,
+      activeCount === 1 && total >= 5 ? "Un seul actif sur beaucoup... Focus total ! 🎯" : null,
+      archivedCount >= 5 ? `${archivedCount} relations en pause... Tu réfléchis beaucoup ! 🤔` : null,
+      activeCount === total && total >= 3 ? "Tout le monde est actif ! C'est l'effervescence 🔥" : null,
+
+      // Actions
+      totalGoodActions > totalBadActions * 3 ? "Que des bonnes actions ! Optimiste ou amnésique ? 😇" : null,
+      totalBadActions > totalGoodActions * 2 ? "Beaucoup d'erreurs notées... T'oublies rien toi ! 📝" : null,
+      totalGoodActions === 0 && totalBadActions > 0 ? "Aucune bonne action ? Dur dur... 😬" : null,
+      totalBadActions === 0 && totalGoodActions > 0 ? "Aucune mauvaise action ? Parfait ! 😇" : null,
+      totalGoodActions > 30 ? "Plus de 30 bonnes actions ! T'es généreux(se) 💚" : null,
+      totalBadActions > 30 ? "Plus de 30 mauvaises actions notées... Ça fait beaucoup ! 😰" : null,
+      totalGoodActions === totalBadActions && totalGoodActions > 0 ? "Autant de bon que de mauvais... Équilibré ! ⚖️" : null,
+
+      // Total count
+      total === 1 ? "Un seul crush... Fidèle ou débutant(e) ? 💝" : null,
+      total === 2 ? "Deux crushes... Le duo parfait ou l'hésitation ? 👥" : null,
+      total === 3 ? "Trois crushes... Le chiffre magique ! 🎩" : null,
+      total >= 10 ? `${total} crushes ! T'as du succès ou tu collectionnes ? 🌟` : null,
+      total >= 15 ? `${total} relations... C'est une base de données ! 📊` : null,
+      total >= 20 ? `${total} crushes ?! T'es sérieux(se) là ? 🤯` : null,
+
+      // Detailed knowledge
+      crushes.some(c => (c.qualities?.length || 0) + (c.defects?.length || 0) >= 10) ? "Y'a quelqu'un que tu connais TRÈS bien par ici 👀" : null,
+      crushes.some(c => (c.qualities?.length || 0) + (c.defects?.length || 0) >= 15) ? "15+ traits sur quelqu'un ? C'est ton âme sœur ou ton pire ennemi ! 😅" : null,
+      crushes.some(c => (c.pros?.length || 0) + (c.cons?.length || 0) >= 20) ? "20+ actions notées pour quelqu'un... T'as un dossier complet ! 📁" : null,
+      crushes.every(c => (c.pros?.length || 0) + (c.cons?.length || 0) < 2) ? "Peu d'actions notées... Tu débutes ou tu observes ? 👀" : null,
+
+      // Feelings patterns
+      crushes.every(c => (c.feelings ?? 50) > 60) ? "Que des hauts niveaux de sentiments ! L'amour est dans l'air 💖" : null,
+      crushes.every(c => (c.feelings ?? 50) < 40) ? "Tous en dessous de 40%... Période difficile ? 😔" : null,
+      crushes.some(c => (c.feelings ?? 50) === 100) ? "Quelqu'un à 100% ! Coup de foudre total ! ⚡" : null,
+      crushes.some(c => (c.feelings ?? 50) === 0) ? "Quelqu'un à 0%... Pourquoi tu le gardes ?! 😂" : null,
+      crushes.filter(c => (c.feelings ?? 50) >= 80).length >= 3 ? "3+ personnes au-dessus de 80% ? T'es populaire ! 🌟" : null,
+
+      // Mixed stats
+      activeCount >= 3 && destroyedCount === 0 ? "Plusieurs actifs, aucun échec... T'assures ! 💪" : null,
+      archivedCount === 0 && destroyedCount === 0 && total >= 4 ? "Aucune pause ni game over ? Maître du jeu ! 🎮" : null,
+      totalGoodActions > 0 && totalBadActions === 0 && total >= 2 ? "Que des bonnes vibes ! Idéaliste ? 🌈" : null,
+      cemeteryRate < 20 && total >= 5 ? "Moins de 20% d'échecs... Bon taux de réussite ! 📈" : null,
+      avgFeelings > 65 && destroyedCount <= 1 ? "Sentiments élevés et peu d'échecs... Chanceux(se) ! 🍀" : null,
+
+      // Funny observations
+      crushes.some(c => c.description && c.description.length > 200) ? "Y'a une description de roman quelque part ! 📖" : null,
+      crushes.filter(c => c.mistakes >= 3).length >= 2 ? "Plusieurs personnes à 3+ erreurs... Zone dangereuse ! ⚠️" : null,
+      crushes.every(c => c.name.length < 5) && total >= 2 ? "Que des noms courts... Tu vas à l'essentiel ! ⚡" : null,
+      total >= 3 && totalGoodActions + totalBadActions < 5 ? "Peu d'actions notées... Tu préfères observer ? 🧐" : null,
+    ].filter(Boolean);
+
+    // Pick a random message or default
+    const selectedMessage = messages.length > 0
+      ? messages[Math.floor(Math.random() * messages.length)]
+      : "Les étoiles sont alignées... mais elles ont rien à dire ! 🌟";
+
+    setOracleMessage(selectedMessage);
+    setOracleModalVisible(true);
+  };
+
+  // Easter egg: Revive a crush from cemetery
+  const reviveCrush = async (crushId) => {
+    setRevivalModalVisible(false);
+
+    // Check if max revivals reached
+    if (revivalCount >= 2) {
+      Alert.alert('😱', 'Désolé mais on peut pas te laisser faire ça !!');
+      return;
+    }
+
+    // Show warning alert
+    Alert.alert('⚠️', "C'est vraiment pas une bonne idée...", [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Continuer quand même',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const updatedCrushes = crushes.map(c =>
+              c.id === crushId ? { ...c, mistakes: 0 } : c
+            );
+            await saveCrushes(updatedCrushes);
+            setCrushes(updatedCrushes);
+
+            // Increment revival count
+            const newCount = revivalCount + 1;
+            setRevivalCount(newCount);
+            await AsyncStorage.setItem('@revival_count', newCount.toString());
+
+            Alert.alert('🎉', 'Résurrection réussie ! Mais fais attention...');
+          } catch (error) {
+            Alert.alert('Erreur', 'Impossible de ressusciter ce crush');
+          }
+        },
+      },
+    ]);
   };
 
   const saveReorderedCrushes = async () => {
@@ -381,8 +586,10 @@ export default function CrushListScreen({ navigation }) {
       <TouchableOpacity
         style={styles.floatingButton}
         onPress={() => setModalVisible(true)}
+        onLongPress={openOracle}
         testID="open-add-modal-button"
         accessibilityLabel="Ouvrir le formulaire d'ajout"
+        delayLongPress={2000}
       >
         <Text style={styles.floatingButtonText}>+</Text>
       </TouchableOpacity>
@@ -574,6 +781,74 @@ export default function CrushListScreen({ navigation }) {
             <TouchableOpacity
               style={styles.settingsCloseButton}
               onPress={() => setSettingsModalVisible(false)}
+            >
+              <Text style={styles.settingsCloseButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Easter Egg: Secret Revival Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={revivalModalVisible}
+        onRequestClose={() => setRevivalModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.revivalModal]}>
+            <Text style={styles.modalTitle}>🪦 Résurrection Secrète</Text>
+            <Text style={styles.revivalSubtitle}>
+              {revivalCount < 2
+                ? `${2 - revivalCount} résurrection${2 - revivalCount > 1 ? 's' : ''} restante${2 - revivalCount > 1 ? 's' : ''}`
+                : 'Plus de résurrections disponibles'}
+            </Text>
+
+            <FlatList
+              data={destroyedCrushes}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.revivalItem}
+                  onPress={() => reviveCrush(item.id)}
+                  disabled={revivalCount >= 2}
+                >
+                  <Text style={styles.revivalName}>☠️ {item.name}</Text>
+                  <Text style={styles.revivalDate}>
+                    {new Date(item.createdAt).toLocaleDateString('fr-FR')}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={item => item.id}
+              style={styles.revivalList}
+            />
+
+            <TouchableOpacity
+              style={styles.settingsCloseButton}
+              onPress={() => setRevivalModalVisible(false)}
+            >
+              <Text style={styles.settingsCloseButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Easter Egg: Relationship Oracle */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={oracleModalVisible}
+        onRequestClose={() => setOracleModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.oracleModalContent}>
+            <Text style={styles.oracleIcon}>🔮</Text>
+            <Text style={styles.oracleTitle}>L'Oracle des Relations</Text>
+            <View style={styles.oracleMessageContainer}>
+              <Text style={styles.oracleMessage}>{oracleMessage}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.settingsCloseButton}
+              onPress={() => setOracleModalVisible(false)}
             >
               <Text style={styles.settingsCloseButtonText}>✕</Text>
             </TouchableOpacity>
@@ -988,5 +1263,77 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginBottom: 10,
+  },
+  revivalModal: {
+    height: '70%',
+    maxHeight: 500,
+  },
+  revivalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  revivalList: {
+    flex: 1,
+    width: '100%',
+    marginVertical: 10,
+  },
+  revivalItem: {
+    backgroundColor: '#2A2A2A',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    borderLeftColor: '#8B0000',
+  },
+  revivalName: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  revivalDate: {
+    fontSize: 14,
+    color: '#999',
+  },
+  oracleModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 32,
+    width: '85%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  oracleIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  oracleTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#4B0082',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  oracleMessageContainer: {
+    backgroundColor: '#F8F5FF',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#E6D9FF',
+    minHeight: 100,
+    justifyContent: 'center',
+  },
+  oracleMessage: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    lineHeight: 24,
+    fontStyle: 'italic',
   },
 });
