@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Crush Life",
-    "slug": "crush-life",
-    "version": "1.1.0",
+    "name": "Crushit",
+    "slug": "crushit",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,14 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.crushlife.app"
+      "bundleIdentifier": "com.crushit.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FF6B9D"
       },
-      "package": "com.crushlife.app"
+      "package": "com.crushit.app"
     },
     "extra": {
       "eas": {

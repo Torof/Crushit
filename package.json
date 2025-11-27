@@ -1,6 +1,6 @@
 {
-  "name": "crush-life",
-  "version": "1.1.0",
+  "name": "crushit",
+  "version": "1.2.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -17,7 +17,7 @@
       "<rootDir>/jest.setup.js"
     ],
     "transformIgnorePatterns": [
-      "node_modules/(?!(react-native|@react-native|expo|@expo|expo-modules-core|@unimodules|@react-navigation|react-native-svg)/)"
+      "node_modules/(?!(react-native|@react-native|expo|@expo|expo-modules-core|@unimodules|@react-navigation|react-native-svg|expo-image-picker|expo-linear-gradient)/)"
     ],
     "testMatch": [
       "**/__tests__/**/*.js",
@@ -36,8 +36,16 @@
     }
   },
   "dependencies": {
+    "@expo-google-fonts/architects-daughter": "^0.4.1",
     "@expo-google-fonts/caveat": "^0.4.2",
     "@expo-google-fonts/dancing-script": "^0.4.2",
+    "@expo-google-fonts/indie-flower": "^0.4.1",
+    "@expo-google-fonts/lobster": "^0.4.1",
+    "@expo-google-fonts/pacifico": "^0.4.1",
+    "@expo-google-fonts/permanent-marker": "^0.4.0",
+    "@expo-google-fonts/sacramento": "^0.4.1",
+    "@expo-google-fonts/satisfy": "^0.4.1",
+    "@expo-google-fonts/shadows-into-light": "^0.4.1",
     "@expo/metro-runtime": "~6.1.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/slider": "5.0.1",
