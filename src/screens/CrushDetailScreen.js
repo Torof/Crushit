@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -19,7 +20,8 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from '@expo-google-fonts/caveat';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { loadCrushes, saveCrushes, sanitizeInput, loadThemeColor, loadBackgroundColor } from '../utils/storage';
+import { loadCrushes, saveCrushes, sanitizeInput, loadThemeColor, loadBackgroundColor, AVAILABLE_FONTS, loadFontHeaders, loadFontItems, loadFontTitles, getFontFamily, loadLanguage } from '../utils/storage';
+import { translations } from '../utils/translations';
 
 const { width } = Dimensions.get('window');
 const SIZE = 60;
@@ -27,7 +29,7 @@ const RADIUS = SIZE / 2;
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 export default function CrushDetailScreen({ route, navigation }) {
-  const { crushId } = route.params;
+  const { crushId, language: passedLanguage } = route.params;
 
   // Load handwritten font
   const [fontsLoaded] = useFonts({
@@ -68,8 +70,17 @@ export default function CrushDetailScreen({ route, navigation }) {
   const [themeColor, setThemeColor] = useState('#FF6B9D');
   const [backgroundColor, setBackgroundColor] = useState('#FFF0F5');
 
+  // Fonts
+  const [fontHeaders, setFontHeaders] = useState('DancingScript');
+  const [fontItems, setFontItems] = useState('System');
+  const [fontTitles, setFontTitles] = useState('DancingScript');
+
   // Double-tap detection for trait flags
   const lastTapRef = useRef(null);
+
+  // Language
+  const [language, setLanguage] = useState(passedLanguage || 'fr');
+  const t = translations[language];
 
   // Animated values using useRef
   const pacmanX = useRef(new Animated.Value(-100)).current;
@@ -83,11 +94,29 @@ export default function CrushDetailScreen({ route, navigation }) {
     loadColor();
   }, []);
 
+  // Reload fonts and colors when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadColor();
+    }, [])
+  );
+
   const loadColor = async () => {
+    // Load language if not passed from navigation
+    if (!passedLanguage) {
+      const savedLanguage = await loadLanguage();
+      setLanguage(savedLanguage);
+    }
     const color = await loadThemeColor();
     setThemeColor(color);
     const bgColor = await loadBackgroundColor();
     setBackgroundColor(bgColor);
+    const savedFontHeaders = await loadFontHeaders();
+    setFontHeaders(savedFontHeaders);
+    const savedFontItems = await loadFontItems();
+    setFontItems(savedFontItems);
+    const savedFontTitles = await loadFontTitles();
+    setFontTitles(savedFontTitles);
   };
 
   // Danger Zone: Pulse animation when only 1 life left
@@ -116,6 +145,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
   // Add status button and diary button to navigation header
   useEffect(() => {
+    const customFont = getFontFamily(fontHeaders);
     if (crush && crush.mistakes < 5) {
       navigation.setOptions({
         headerTitle: () => (
@@ -133,13 +163,17 @@ export default function CrushDetailScreen({ route, navigation }) {
                 <MaterialIcons name="person" size={20} color="#999" />
               )}
             </View>
-            <Text style={styles.headerTitle}>{crush.name}</Text>
+            <Text style={{
+              fontSize: 18,
+              color: '#fff',
+              ...(customFont ? { fontFamily: customFont } : { fontWeight: 'bold' })
+            }}>{crush.name}</Text>
           </TouchableOpacity>
         ),
         headerRight: () => (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15, marginRight: 15 }}>
             <TouchableOpacity
-              onPress={() => navigation.navigate('Diary', { crushId: crush.id })}
+              onPress={() => navigation.navigate('Diary', { crushId: crush.id, language })}
             >
               <MaterialIcons name="book" size={24} color="#fff" />
             </TouchableOpacity>
@@ -165,12 +199,16 @@ export default function CrushDetailScreen({ route, navigation }) {
                 <MaterialIcons name="person" size={20} color="#999" />
               )}
             </View>
-            <Text style={styles.headerTitle}>{crush.name}</Text>
+            <Text style={{
+              fontSize: 18,
+              color: '#fff',
+              ...(customFont ? { fontFamily: customFont } : { fontWeight: 'bold' })
+            }}>{crush.name}</Text>
           </View>
         ),
       });
     }
-  }, [navigation, crush]);
+  }, [navigation, crush, fontHeaders]);
 
   const loadCrush = async () => {
     const crushes = await loadCrushes();
@@ -192,8 +230,8 @@ export default function CrushDetailScreen({ route, navigation }) {
     if (updatedCrush.mistakes >= 5) {
       const showDestructionAlert = () => {
         Alert.alert(
-          '☠️ GAME OVER ☠️',
-          `${updatedCrush.name} a perdu après 5 erreurs. Il a été déplacé au cimetière.`,
+          t.gameOver,
+          `${updatedCrush.name} ${t.crushLostAfter5Mistakes}`,
           [
             {
               text: 'OK',
@@ -223,7 +261,7 @@ export default function CrushDetailScreen({ route, navigation }) {
     const sanitizedDescription = sanitizeInput(actionDescription);
 
     if (sanitizedTitle === '') {
-      Alert.alert('Erreur', 'Veuillez entrer un titre valide');
+      Alert.alert(t.error, t.enterValidTitle);
       return;
     }
 
@@ -261,18 +299,18 @@ export default function CrushDetailScreen({ route, navigation }) {
       setActionDescription('');
       setModalVisible(false);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder l\'action');
+      Alert.alert(t.error, t.unableToSaveAction);
     }
   };
 
   const removeAction = async (id, type) => {
     Alert.alert(
-      'Supprimer l\'Action',
-      'Êtes-vous sûr ?',
+      t.deleteAction,
+      t.areYouSure,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t.cancel, style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t.delete,
           style: 'destructive',
           onPress: async () => {
             let updatedCrush = { ...crush };
@@ -294,7 +332,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
   const openModal = (type) => {
     if (crush.mistakes >= 5) {
-      Alert.alert('Game Over', 'Ce crush est game over et ne peut plus être modifié.');
+      Alert.alert('Game Over', t.crushIsGameOver);
       return;
     }
     setActionType(type);
@@ -319,7 +357,7 @@ export default function CrushDetailScreen({ route, navigation }) {
     const sanitizedDescription = sanitizeInput(editedActionDescription);
 
     if (sanitizedTitle === '') {
-      Alert.alert('Erreur', 'Veuillez entrer un titre valide');
+      Alert.alert(t.error, t.enterValidTitle);
       return;
     }
 
@@ -348,7 +386,7 @@ export default function CrushDetailScreen({ route, navigation }) {
       });
       setIsEditingAction(false);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder les modifications');
+      Alert.alert(t.error, t.unableToSaveChanges);
     }
   };
 
@@ -373,7 +411,7 @@ export default function CrushDetailScreen({ route, navigation }) {
       await updateCrush(updatedCrush);
       setEditDescriptionModalVisible(false);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder la description');
+      Alert.alert(t.error, t.unableToSaveDescription);
     }
   };
 
@@ -381,12 +419,12 @@ export default function CrushDetailScreen({ route, navigation }) {
     // Easter egg: Custom alert when changing from standby to active
     if (crush.status === 'standby' && newStatus === 'active') {
       Alert.alert(
-        'Confirmation',
-        "T'es sûr(e) de ton coup là ?",
+        t.confirm,
+        t.sureAboutThis,
         [
-          { text: 'Annuler', style: 'cancel' },
+          { text: t.cancel, style: 'cancel' },
           {
-            text: 'Oui',
+            text: t.yes,
             onPress: async () => {
               try {
                 const updatedCrush = {
@@ -395,9 +433,9 @@ export default function CrushDetailScreen({ route, navigation }) {
                 };
                 await updateCrush(updatedCrush);
                 setStatusModalVisible(false);
-                Alert.alert('Statut mis à jour', 'Relation marquée comme active');
+                Alert.alert(t.statusUpdated, t.relationMarkedActive);
               } catch (error) {
-                Alert.alert('Erreur', 'Impossible de mettre à jour le statut');
+                Alert.alert(t.error, t.unableToUpdateStatus);
               }
             },
           },
@@ -416,11 +454,11 @@ export default function CrushDetailScreen({ route, navigation }) {
 
       // Show confirmation message
       const statusMessages = {
-        active: 'Relation marquée comme active',
-        ended: 'Relation marquée comme terminée',
-        standby: 'Relation mise en pause',
+        active: t.relationMarkedActive,
+        ended: t.relationMarkedEnded,
+        standby: t.relationOnHold,
       };
-      Alert.alert('Statut mis à jour', statusMessages[newStatus], [
+      Alert.alert(t.statusUpdated, statusMessages[newStatus], [
         {
           text: 'OK',
           onPress: () => {
@@ -431,14 +469,14 @@ export default function CrushDetailScreen({ route, navigation }) {
         },
       ]);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de mettre à jour le statut');
+      Alert.alert(t.error, t.unableToUpdateStatus);
     }
   };
 
   // New functions for qualities, defects, and feelings
   const openTraitModal = (type) => {
     if (crush.mistakes >= 5) {
-      Alert.alert('Game Over', 'Ce crush est game over et ne peut plus être modifié.');
+      Alert.alert('Game Over', t.crushIsGameOver);
       return;
     }
     setTraitType(type);
@@ -449,7 +487,7 @@ export default function CrushDetailScreen({ route, navigation }) {
     const sanitizedText = sanitizeInput(traitText);
 
     if (sanitizedText === '') {
-      Alert.alert('Erreur', 'Veuillez entrer un texte valide');
+      Alert.alert(t.error, t.enterValidText);
       return;
     }
 
@@ -472,18 +510,18 @@ export default function CrushDetailScreen({ route, navigation }) {
       setTraitText('');
       setTraitModalVisible(false);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder');
+      Alert.alert(t.error, t.unableToSaveItem);
     }
   };
 
   const removeTrait = async (id, type) => {
     Alert.alert(
-      'Supprimer',
-      'Êtes-vous sûr ?',
+      t.delete,
+      t.areYouSure,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t.cancel, style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t.delete,
           style: 'destructive',
           onPress: async () => {
             let updatedCrush = { ...crush };
@@ -552,7 +590,7 @@ export default function CrushDetailScreen({ route, navigation }) {
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder à vos photos.');
+        Alert.alert(t.permissionRequired, t.needPhotoPermission);
         return;
       }
 
@@ -573,19 +611,19 @@ export default function CrushDetailScreen({ route, navigation }) {
         setPictureModalVisible(false);
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de charger la photo');
+      Alert.alert(t.error, t.unableToLoadPhoto);
       console.error(error);
     }
   };
 
   const deletePicture = async () => {
     Alert.alert(
-      'Supprimer la photo',
-      'Êtes-vous sûr de vouloir supprimer cette photo ?',
+      t.deletePhoto,
+      t.confirmDeletePhoto,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t.cancel, style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t.delete,
           style: 'destructive',
           onPress: async () => {
             try {
@@ -596,7 +634,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               await updateCrush(updatedCrush);
               setPictureModalVisible(false);
             } catch (error) {
-              Alert.alert('Erreur', 'Impossible de supprimer la photo');
+              Alert.alert(t.error, t.unableToDeletePhoto);
             }
           },
         },
@@ -773,7 +811,7 @@ export default function CrushDetailScreen({ route, navigation }) {
                   key={index}
                   onLongPress={() => {
                     if (isLastHeart) {
-                      Alert.alert('⚠️ Danger Zone', 'Attention, c\'est la dernière chance...');
+                      Alert.alert(t.dangerZone, t.lastChance);
                     }
                   }}
                   style={[
@@ -806,7 +844,7 @@ export default function CrushDetailScreen({ route, navigation }) {
           end={{ x: 1, y: 0 }}
           style={styles.gradientBorder}
         />
-        <Text style={styles.feelingsLabelText}>Niveau de sentiments :</Text>
+        <Text style={styles.feelingsLabelText}>{t.feelingsLevel}</Text>
         <View style={styles.feelingsSliderContainer}>
           <Text style={styles.feelingsLabelCompact}>😐</Text>
           <Slider
@@ -841,7 +879,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               style={styles.descriptionSection}
               onPress={openEditDescription}
             >
-              <Text style={styles.emptyDescriptionText}>Appuyez pour ajouter une description</Text>
+              <Text style={styles.emptyDescriptionText}>{t.tapToAddDescription}</Text>
             </TouchableOpacity>
           )
         )}
@@ -851,7 +889,10 @@ export default function CrushDetailScreen({ route, navigation }) {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
               <MaterialIcons name="warning" size={22} color="#EF5350" />
-              <Text style={styles.sectionTitle}>Mauvaises actions ({crush.cons.length})</Text>
+              <Text style={[
+                styles.sectionTitle,
+                getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+              ]}>{t.badActions} ({crush.cons.length})</Text>
             </View>
             <TouchableOpacity
               style={[styles.addActionButton, styles.addBadButton]}
@@ -866,7 +907,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
           {crush.cons.length === 0 ? (
             <View style={styles.emptyList}>
-              <Text style={styles.emptyText}>Aucune erreur pour l'instant</Text>
+              <Text style={styles.emptyText}>{t.noMistakesYet}</Text>
             </View>
           ) : (
             crush.cons.map((con) => (
@@ -876,7 +917,7 @@ export default function CrushDetailScreen({ route, navigation }) {
                 onPress={() => viewActionDetails(con, 'con')}
                 onLongPress={() => removeAction(con.id, 'con')}
               >
-                <Text style={styles.actionText}>{con.title || con.text}</Text>
+                <Text style={[styles.actionText, getFontFamily(fontItems) && { fontFamily: getFontFamily(fontItems) }]}>{con.title || con.text}</Text>
               </TouchableOpacity>
             ))
           )}
@@ -887,7 +928,10 @@ export default function CrushDetailScreen({ route, navigation }) {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
               <Ionicons name="checkmark-circle" size={22} color="#4CAF50" />
-              <Text style={styles.sectionTitle}>Bonnes actions ({crush.pros.length})</Text>
+              <Text style={[
+                styles.sectionTitle,
+                getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+              ]}>{t.goodActions} ({crush.pros.length})</Text>
             </View>
             <TouchableOpacity
               style={styles.addActionButton}
@@ -902,7 +946,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
           {crush.pros.length === 0 ? (
             <View style={styles.emptyList}>
-              <Text style={styles.emptyText}>Aucune bonne action pour l'instant</Text>
+              <Text style={styles.emptyText}>{t.noGoodActionsYet}</Text>
             </View>
           ) : (
             crush.pros.map((pro) => (
@@ -912,7 +956,7 @@ export default function CrushDetailScreen({ route, navigation }) {
                 onPress={() => viewActionDetails(pro, 'pro')}
                 onLongPress={() => removeAction(pro.id, 'pro')}
               >
-                <Text style={styles.actionText}>{pro.title || pro.text}</Text>
+                <Text style={[styles.actionText, getFontFamily(fontItems) && { fontFamily: getFontFamily(fontItems) }]}>{pro.title || pro.text}</Text>
               </TouchableOpacity>
             ))
           )}
@@ -931,7 +975,10 @@ export default function CrushDetailScreen({ route, navigation }) {
             <View style={styles.traitsColumn}>
               <View style={styles.traitsColumnHeader}>
                 <Ionicons name="star" size={18} color="#4CAF50" />
-                <Text style={styles.traitsColumnTitle}>Qualités</Text>
+                <Text style={[
+                  styles.traitsColumnTitle,
+                  getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+                ]}>{t.qualities}</Text>
                 <TouchableOpacity
                   style={styles.addTraitButton}
                   onPress={() => openTraitModal('quality')}
@@ -943,7 +990,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
               {(crush.qualities || []).length === 0 ? (
                 <View style={styles.emptyTraits}>
-                  <Text style={styles.emptyTraitsText}>Aucune</Text>
+                  <Text style={styles.emptyTraitsText}>{t.none}</Text>
                 </View>
               ) : (
                 <View style={styles.traitsContainer}>
@@ -954,7 +1001,7 @@ export default function CrushDetailScreen({ route, navigation }) {
                       onPress={() => handleTraitPress(quality.id, 'quality')}
                       onLongPress={() => removeTrait(quality.id, 'quality')}
                     >
-                      <Text style={styles.traitText}>
+                      <Text style={[styles.traitText, getFontFamily(fontItems) && { fontFamily: getFontFamily(fontItems) }]}>
                         {quality.text}
                         {quality.flagged && ' ⭐'}
                       </Text>
@@ -968,7 +1015,10 @@ export default function CrushDetailScreen({ route, navigation }) {
             <View style={styles.traitsColumn}>
               <View style={styles.traitsColumnHeader}>
                 <Ionicons name="flag" size={18} color="#FF6B6B" />
-                <Text style={styles.traitsColumnTitle}>Défauts</Text>
+                <Text style={[
+                  styles.traitsColumnTitle,
+                  getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+                ]}>{t.defects}</Text>
                 <TouchableOpacity
                   style={styles.addTraitButton}
                   onPress={() => openTraitModal('defect')}
@@ -980,7 +1030,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
               {(crush.defects || []).length === 0 ? (
                 <View style={styles.emptyTraits}>
-                  <Text style={styles.emptyTraitsText}>Aucun</Text>
+                  <Text style={styles.emptyTraitsText}>{t.noneM}</Text>
                 </View>
               ) : (
                 <View style={styles.traitsContainer}>
@@ -991,7 +1041,7 @@ export default function CrushDetailScreen({ route, navigation }) {
                       onPress={() => handleTraitPress(defect.id, 'defect')}
                       onLongPress={() => removeTrait(defect.id, 'defect')}
                     >
-                      <Text style={styles.traitText}>
+                      <Text style={[styles.traitText, getFontFamily(fontItems) && { fontFamily: getFontFamily(fontItems) }]}>
                         {defect.text}
                         {defect.flagged && ' 🚩'}
                       </Text>
@@ -1012,13 +1062,16 @@ export default function CrushDetailScreen({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {actionType === 'pro' ? 'Ajouter une Bonne Action' : 'Ajouter une Mauvaise Action / Erreur'}
+            <Text style={[
+              styles.modalTitle,
+              getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+            ]}>
+              {actionType === 'pro' ? t.addGoodAction : t.addBadAction}
             </Text>
 
             <TextInput
               style={styles.inputTitle}
-              placeholder="Titre"
+              placeholder={t.title}
               value={actionTitle}
               onChangeText={setActionTitle}
               autoFocus
@@ -1027,7 +1080,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
             <TextInput
               style={styles.inputDescription}
-              placeholder="Description (optionnelle)"
+              placeholder={t.descriptionOptional}
               value={actionDescription}
               onChangeText={setActionDescription}
               multiline
@@ -1037,7 +1090,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
             {actionType === 'con' && (
               <Text style={styles.warningText}>
-                ⚠️ Ceci comptera comme une erreur ({livesLeft - 1} {livesLeft - 1 > 1 ? 'vies restantes' : 'vie restante'} après)
+                {t.thisWillCountAsMistake} ({livesLeft - 1} {livesLeft - 1 > 1 ? t.livesRemainingAfterPlural : t.livesRemainingAfter})
               </Text>
             )}
 
@@ -1050,7 +1103,7 @@ export default function CrushDetailScreen({ route, navigation }) {
                   setModalVisible(false);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
+                <Text style={styles.cancelButtonText}>{t.cancel}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1060,9 +1113,9 @@ export default function CrushDetailScreen({ route, navigation }) {
                 ]}
                 onPress={addAction}
                 testID="modal-add-action-button"
-                accessibilityLabel="Ajouter l'action"
+                accessibilityLabel={t.add}
               >
-                <Text style={styles.confirmButtonText}>Ajouter</Text>
+                <Text style={styles.confirmButtonText}>{t.add}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1080,11 +1133,17 @@ export default function CrushDetailScreen({ route, navigation }) {
           <View style={styles.modalContent}>
             <View style={styles.detailHeader}>
               {isEditingAction ? (
-                <Text style={styles.detailTitle}>Modifier l'Action</Text>
+                <Text style={[
+                  styles.detailTitle,
+                  getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+                ]}>{t.editAction}</Text>
               ) : (
                 <>
-                  <Text style={styles.detailTitle}>
-                    {selectedAction?.title || selectedAction?.text || 'Détails de l\'Action'}
+                  <Text style={[
+                    styles.detailTitle,
+                    getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+                  ]}>
+                    {selectedAction?.title || selectedAction?.text || ''}
                   </Text>
                   <TouchableOpacity
                     style={styles.editButton}
@@ -1100,7 +1159,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               <>
                 <TextInput
                   style={styles.inputTitle}
-                  placeholder="Titre"
+                  placeholder={t.title}
                   value={editedActionTitle}
                   onChangeText={setEditedActionTitle}
                   autoFocus
@@ -1109,7 +1168,7 @@ export default function CrushDetailScreen({ route, navigation }) {
 
                 <TextInput
                   style={styles.inputDescription}
-                  placeholder="Description (optionnelle)"
+                  placeholder={t.descriptionOptional}
                   value={editedActionDescription}
                   onChangeText={setEditedActionDescription}
                   multiline
@@ -1120,11 +1179,14 @@ export default function CrushDetailScreen({ route, navigation }) {
             ) : (
               <>
                 {selectedAction?.description && (
-                  <Text style={styles.detailDescription}>{selectedAction.description}</Text>
+                  <Text style={[
+                    styles.detailDescription,
+                    getFontFamily(fontItems) && { fontFamily: getFontFamily(fontItems) }
+                  ]}>{selectedAction.description}</Text>
                 )}
 
                 <Text style={styles.detailDate}>
-                  {selectedAction?.createdAt && new Date(selectedAction.createdAt).toLocaleDateString('fr-FR', {
+                  {selectedAction?.createdAt && new Date(selectedAction.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',
@@ -1140,14 +1202,14 @@ export default function CrushDetailScreen({ route, navigation }) {
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={cancelEditingAction}
                 >
-                  <Text style={styles.cancelButtonText}>Annuler</Text>
+                  <Text style={styles.cancelButtonText}>{t.cancel}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.modalButton, styles.confirmButton, { backgroundColor: themeColor }]}
                   onPress={saveEditedAction}
                 >
-                  <Text style={styles.confirmButtonText}>Sauvegarder</Text>
+                  <Text style={styles.confirmButtonText}>{t.save}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -1171,11 +1233,14 @@ export default function CrushDetailScreen({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Modifier la Description</Text>
+            <Text style={[
+              styles.modalTitle,
+              getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+            ]}>{t.editDescription}</Text>
 
             <TextInput
               style={styles.inputDescription}
-              placeholder="Ajouter une description..."
+              placeholder={t.addDescription}
               value={editedDescription}
               onChangeText={setEditedDescription}
               multiline
@@ -1191,14 +1256,14 @@ export default function CrushDetailScreen({ route, navigation }) {
                   setEditDescriptionModalVisible(false);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
+                <Text style={styles.cancelButtonText}>{t.cancel}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.modalButton, styles.confirmButton]}
                 onPress={saveDescription}
               >
-                <Text style={styles.confirmButtonText}>Sauvegarder</Text>
+                <Text style={styles.confirmButtonText}>{t.save}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1214,13 +1279,16 @@ export default function CrushDetailScreen({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {traitType === 'quality' ? 'Ajouter une Qualité' : 'Ajouter un Défaut'}
+            <Text style={[
+              styles.modalTitle,
+              getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+            ]}>
+              {traitType === 'quality' ? t.addQuality : t.addDefect}
             </Text>
 
             <TextInput
               style={styles.inputTitle}
-              placeholder={traitType === 'quality' ? 'Ex: Drôle, Intelligent...' : 'Ex: Jaloux, Arrogant...'}
+              placeholder={traitType === 'quality' ? t.qualityExample : t.defectExample}
               value={traitText}
               onChangeText={setTraitText}
               autoFocus
@@ -1235,7 +1303,7 @@ export default function CrushDetailScreen({ route, navigation }) {
                   setTraitModalVisible(false);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
+                <Text style={styles.cancelButtonText}>{t.cancel}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1245,7 +1313,7 @@ export default function CrushDetailScreen({ route, navigation }) {
                 ]}
                 onPress={addTrait}
               >
-                <Text style={styles.confirmButtonText}>Ajouter</Text>
+                <Text style={styles.confirmButtonText}>{t.add}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1261,14 +1329,17 @@ export default function CrushDetailScreen({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.settingsModalContent}>
-            <Text style={styles.modalTitle}>Changer le statut</Text>
+            <Text style={[
+              styles.modalTitle,
+              getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+            ]}>{t.changeStatus}</Text>
 
             <TouchableOpacity
               style={styles.statusOption}
               onPress={() => changeStatus('active')}
             >
               <Text style={styles.statusOptionIcon}>✅</Text>
-              <Text style={styles.statusOptionTitle}>Actif</Text>
+              <Text style={styles.statusOptionTitle}>{t.active}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1276,7 +1347,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               onPress={() => changeStatus('ended')}
             >
               <Text style={styles.statusOptionIcon}>💔</Text>
-              <Text style={styles.statusOptionTitle}>Terminé</Text>
+              <Text style={styles.statusOptionTitle}>{t.ended}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1284,19 +1355,19 @@ export default function CrushDetailScreen({ route, navigation }) {
               onPress={() => changeStatus('standby')}
             >
               <Text style={styles.statusOptionIcon}>⏸️</Text>
-              <Text style={styles.statusOptionTitle}>En pause</Text>
+              <Text style={styles.statusOptionTitle}>{t.onHold}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.statusOption}
               onPress={() => {
                 Alert.alert(
-                  'Confirmer Game Over',
-                  'Êtes-vous sûr de vouloir envoyer cette personne au cimetière ? Cette action ne peut pas être annulée.',
+                  t.confirmGameOver,
+                  t.confirmGameOverMessage,
                   [
-                    { text: 'Annuler', style: 'cancel' },
+                    { text: t.cancel, style: 'cancel' },
                     {
-                      text: 'Confirmer',
+                      text: t.confirm,
                       style: 'destructive',
                       onPress: async () => {
                         const updatedCrush = {
@@ -1319,7 +1390,7 @@ export default function CrushDetailScreen({ route, navigation }) {
               style={[styles.modalButton, styles.confirmButton, styles.closeButton]}
               onPress={() => setStatusModalVisible(false)}
             >
-              <Text style={styles.confirmButtonText}>Annuler</Text>
+              <Text style={styles.confirmButtonText}>{t.cancel}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1347,14 +1418,14 @@ export default function CrushDetailScreen({ route, navigation }) {
                     onPress={deletePicture}
                   >
                     <MaterialIcons name="delete" size={24} color="#fff" />
-                    <Text style={styles.pictureButtonText}>Supprimer</Text>
+                    <Text style={styles.pictureButtonText}>{t.delete}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.pictureButton, styles.uploadButton]}
                     onPress={pickImage}
                   >
                     <MaterialIcons name="photo-library" size={24} color="#fff" />
-                    <Text style={styles.pictureButtonText}>Changer</Text>
+                    <Text style={styles.pictureButtonText}>{t.change}</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -1362,14 +1433,14 @@ export default function CrushDetailScreen({ route, navigation }) {
               <>
                 <View style={styles.noPictureContainer}>
                   <MaterialIcons name="person" size={120} color="#DDD" />
-                  <Text style={styles.noPictureText}>Aucune photo</Text>
+                  <Text style={styles.noPictureText}>{t.noPhoto}</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.pictureButton, styles.uploadButton, { width: '80%' }]}
                   onPress={pickImage}
                 >
                   <MaterialIcons name="add-a-photo" size={24} color="#fff" />
-                  <Text style={styles.pictureButtonText}>Ajouter une photo</Text>
+                  <Text style={styles.pictureButtonText}>{t.addPhoto}</Text>
                 </TouchableOpacity>
               </>
             )}

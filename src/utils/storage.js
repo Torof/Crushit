@@ -305,3 +305,135 @@ export const removePassword = async () => {
     throw error;
   }
 };
+
+// Font management
+const FONT_NAMES_KEY = '@font_names';
+const FONT_HEADERS_KEY = '@font_headers';
+const FONT_ITEMS_KEY = '@font_items';
+const FONT_TITLES_KEY = '@font_titles';
+
+// Default fonts
+const DEFAULT_FONT_NAMES = 'DancingScript';
+const DEFAULT_FONT_HEADERS = 'DancingScript';
+const DEFAULT_FONT_ITEMS = 'System';
+const DEFAULT_FONT_TITLES = 'DancingScript';
+
+// Available fonts list
+export const AVAILABLE_FONTS = [
+  { id: 'System', name: 'Système (Défaut)', family: null },
+  { id: 'DancingScript', name: 'Dancing Script', family: 'DancingScript_400Regular' },
+  { id: 'Caveat', name: 'Caveat', family: 'Caveat_400Regular' },
+  { id: 'Pacifico', name: 'Pacifico', family: 'Pacifico_400Regular' },
+  { id: 'Lobster', name: 'Lobster', family: 'Lobster_400Regular' },
+  { id: 'Satisfy', name: 'Satisfy', family: 'Satisfy_400Regular' },
+  { id: 'IndieFlower', name: 'Indie Flower', family: 'IndieFlower_400Regular' },
+  { id: 'PermanentMarker', name: 'Permanent Marker', family: 'PermanentMarker_400Regular' },
+  { id: 'Sacramento', name: 'Sacramento', family: 'Sacramento_400Regular' },
+  { id: 'ShadowsIntoLight', name: 'Shadows Into Light', family: 'ShadowsIntoLight_400Regular' },
+  { id: 'ArchitectsDaughter', name: 'Architects Daughter', family: 'ArchitectsDaughter_400Regular' },
+];
+
+export const loadFontNames = async () => {
+  try {
+    const font = await AsyncStorage.getItem(FONT_NAMES_KEY);
+    return font || DEFAULT_FONT_NAMES;
+  } catch (error) {
+    console.error('Error loading font names:', error);
+    return DEFAULT_FONT_NAMES;
+  }
+};
+
+export const saveFontNames = async (fontId) => {
+  try {
+    await AsyncStorage.setItem(FONT_NAMES_KEY, fontId);
+  } catch (error) {
+    console.error('Error saving font names:', error);
+    throw error;
+  }
+};
+
+export const loadFontHeaders = async () => {
+  try {
+    const font = await AsyncStorage.getItem(FONT_HEADERS_KEY);
+    return font || DEFAULT_FONT_HEADERS;
+  } catch (error) {
+    console.error('Error loading font headers:', error);
+    return DEFAULT_FONT_HEADERS;
+  }
+};
+
+export const saveFontHeaders = async (fontId) => {
+  try {
+    await AsyncStorage.setItem(FONT_HEADERS_KEY, fontId);
+  } catch (error) {
+    console.error('Error saving font headers:', error);
+    throw error;
+  }
+};
+
+export const loadFontItems = async () => {
+  try {
+    const font = await AsyncStorage.getItem(FONT_ITEMS_KEY);
+    return font || DEFAULT_FONT_ITEMS;
+  } catch (error) {
+    console.error('Error loading font items:', error);
+    return DEFAULT_FONT_ITEMS;
+  }
+};
+
+export const saveFontItems = async (fontId) => {
+  try {
+    await AsyncStorage.setItem(FONT_ITEMS_KEY, fontId);
+  } catch (error) {
+    console.error('Error saving font items:', error);
+    throw error;
+  }
+};
+
+export const loadFontTitles = async () => {
+  try {
+    const font = await AsyncStorage.getItem(FONT_TITLES_KEY);
+    return font || DEFAULT_FONT_TITLES;
+  } catch (error) {
+    console.error('Error loading font titles:', error);
+    return DEFAULT_FONT_TITLES;
+  }
+};
+
+export const saveFontTitles = async (fontId) => {
+  try {
+    await AsyncStorage.setItem(FONT_TITLES_KEY, fontId);
+  } catch (error) {
+    console.error('Error saving font titles:', error);
+    throw error;
+  }
+};
+
+// Helper to get font family from ID
+export const getFontFamily = (fontId) => {
+  const font = AVAILABLE_FONTS.find(f => f.id === fontId);
+  return font ? font.family : null;
+};
+
+// Language management
+const LANGUAGE_KEY = '@app_language';
+const DEFAULT_LANGUAGE = 'fr';
+
+export const loadLanguage = async () => {
+  try {
+    const language = await AsyncStorage.getItem(LANGUAGE_KEY);
+    return language || DEFAULT_LANGUAGE;
+  } catch (error) {
+    console.error('Error loading language:', error);
+    return DEFAULT_LANGUAGE;
+  }
+};
+
+export const saveLanguage = async (language) => {
+  try {
+    await AsyncStorage.setItem(LANGUAGE_KEY, language);
+  } catch (error) {
+    console.error('Error saving language:', error);
+    throw error;
+  }
+};

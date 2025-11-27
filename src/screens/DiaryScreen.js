@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -11,10 +12,11 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from '@expo-google-fonts/caveat';
-import { loadCrushes, saveCrushes, sanitizeInput, loadThemeColor } from '../utils/storage';
+import { loadCrushes, saveCrushes, sanitizeInput, loadThemeColor, AVAILABLE_FONTS, loadFontHeaders, loadFontItems, loadFontTitles, getFontFamily, loadLanguage } from '../utils/storage';
+import { translations } from '../utils/translations';
 
 export default function DiaryScreen({ route, navigation }) {
-  const { crushId } = route.params;
+  const { crushId, language: passedLanguage } = route.params;
 
   // Load handwritten font
   const [fontsLoaded] = useFonts({
@@ -32,16 +34,68 @@ export default function DiaryScreen({ route, navigation }) {
   const [isEditingEntry, setIsEditingEntry] = useState(false);
   const [editedDescription, setEditedDescription] = useState('');
 
+  // Fonts
+  const [fontHeaders, setFontHeaders] = useState('DancingScript');
+  const [fontItems, setFontItems] = useState('System');
+  const [fontTitles, setFontTitles] = useState('DancingScript');
+
+  // Language
+  const [language, setLanguage] = useState(passedLanguage || 'fr');
+  const t = translations[language];
+
   useEffect(() => {
     loadCrush();
+    loadFonts();
+    loadLang();
   }, []);
+
+  const loadLang = async () => {
+    if (!passedLanguage) {
+      const savedLanguage = await loadLanguage();
+      setLanguage(savedLanguage);
+    }
+  };
+
+  // Reload fonts when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadFonts();
+    }, [])
+  );
+
+  // Update header when crush or fontHeaders changes
+  useEffect(() => {
+    if (crush) {
+      const customFont = getFontFamily(fontHeaders);
+      navigation.setOptions({
+        headerTitle: () => (
+          <Text style={{
+            fontSize: 18,
+            color: '#fff',
+            ...(customFont ? { fontFamily: customFont } : { fontWeight: 'bold' })
+          }}>
+            {t.diaryOf} {crush.name}
+          </Text>
+        )
+      });
+    }
+  }, [navigation, crush, fontHeaders]);
+
+  const loadFonts = async () => {
+    const savedFontHeaders = await loadFontHeaders();
+    setFontHeaders(savedFontHeaders);
+    const savedFontItems = await loadFontItems();
+    setFontItems(savedFontItems);
+    const savedFontTitles = await loadFontTitles();
+    setFontTitles(savedFontTitles);
+  };
 
   const loadCrush = async () => {
     const crushes = await loadCrushes();
     const foundCrush = crushes.find(c => c.id === crushId);
+
     if (foundCrush) {
       setCrush(foundCrush);
-      navigation.setOptions({ title: `Journal de ${foundCrush.name}` });
     }
 
     // Load theme color
@@ -63,7 +117,7 @@ export default function DiaryScreen({ route, navigation }) {
     const sanitizedDescription = sanitizeInput(entryDescription);
 
     if (sanitizedTitle === '') {
-      Alert.alert('Erreur', 'Veuillez entrer un titre valide');
+      Alert.alert(t.error, t.enterValidTitle);
       return;
     }
 
@@ -85,18 +139,18 @@ export default function DiaryScreen({ route, navigation }) {
       setEntryDescription('');
       setModalVisible(false);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder l\'entrée');
+      Alert.alert(t.error, t.unableToSaveEntry);
     }
   };
 
   const removeEntry = async (id) => {
     Alert.alert(
-      'Supprimer l\'entrée',
-      'Êtes-vous sûr ?',
+      t.deleteEntry,
+      t.areYouSure,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t.cancel, style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t.delete,
           style: 'destructive',
           onPress: async () => {
             const updatedCrush = {
@@ -141,7 +195,7 @@ export default function DiaryScreen({ route, navigation }) {
       setSelectedEntry({ ...selectedEntry, description: sanitizedDescription });
       setIsEditingEntry(false);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder les modifications');
+      Alert.alert(t.error, t.unableToSaveChanges);
     }
   };
 
@@ -166,8 +220,8 @@ export default function DiaryScreen({ route, navigation }) {
         {diaryEntries.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📖</Text>
-            <Text style={styles.emptyText}>Aucune entrée dans le journal</Text>
-            <Text style={styles.emptySubtext}>Appuyez sur le + pour ajouter une note</Text>
+            <Text style={styles.emptyText}>{t.noEntryInDiary}</Text>
+            <Text style={styles.emptySubtext}>{t.tapPlusToAddNote}</Text>
           </View>
         ) : (
           diaryEntries.map((entry) => (
@@ -177,16 +231,19 @@ export default function DiaryScreen({ route, navigation }) {
               onPress={() => viewEntryDetails(entry)}
             >
               <View style={styles.entryHeader}>
-                <Text style={styles.entryTitle}>{entry.title}</Text>
+                <Text style={[
+                  styles.entryTitle,
+                  getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+                ]}>{entry.title}</Text>
                 <Text style={styles.entryDate}>
-                  {new Date(entry.createdAt).toLocaleDateString('fr-FR', {
+                  {new Date(entry.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                     day: 'numeric',
                     month: 'short',
                   })}
                 </Text>
               </View>
               {entry.description && (
-                <Text style={styles.entryPreview} numberOfLines={2}>
+                <Text style={[styles.entryPreview, getFontFamily(fontItems) && { fontFamily: getFontFamily(fontItems) }]} numberOfLines={2}>
                   {entry.description}
                 </Text>
               )}
@@ -199,6 +256,8 @@ export default function DiaryScreen({ route, navigation }) {
       <TouchableOpacity
         style={[styles.floatingButton, { backgroundColor: themeColor }]}
         onPress={() => setModalVisible(true)}
+        testID="add-entry-button"
+        accessibilityLabel={t.tapPlusToAddNote}
       >
         <MaterialIcons name="add" size={32} color="#fff" />
       </TouchableOpacity>
@@ -212,11 +271,14 @@ export default function DiaryScreen({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Nouvelle entrée</Text>
+            <Text style={[
+              styles.modalTitle,
+              getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+            ]}>{t.newEntry}</Text>
 
             <TextInput
               style={styles.inputTitle}
-              placeholder="Titre"
+              placeholder={t.title}
               value={entryTitle}
               onChangeText={setEntryTitle}
               autoFocus
@@ -225,7 +287,7 @@ export default function DiaryScreen({ route, navigation }) {
 
             <TextInput
               style={styles.inputDescription}
-              placeholder="Description (optionnelle)"
+              placeholder={t.descriptionOptional}
               value={entryDescription}
               onChangeText={setEntryDescription}
               multiline
@@ -242,14 +304,15 @@ export default function DiaryScreen({ route, navigation }) {
                   setModalVisible(false);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
+                <Text style={styles.cancelButtonText}>{t.cancel}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.modalButton, styles.confirmButton, { backgroundColor: themeColor }]}
                 onPress={addEntry}
+                testID="modal-add-entry-button"
               >
-                <Text style={styles.confirmButtonText}>Ajouter</Text>
+                <Text style={styles.confirmButtonText}>{t.add}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -266,7 +329,10 @@ export default function DiaryScreen({ route, navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.detailHeader}>
-              <Text style={styles.detailTitle}>{selectedEntry?.title || ''}</Text>
+              <Text style={[
+                styles.detailTitle,
+                getFontFamily(fontTitles) && { fontFamily: getFontFamily(fontTitles), fontWeight: 'normal' }
+              ]}>{selectedEntry?.title || ''}</Text>
               {!isEditingEntry && (
                 <TouchableOpacity
                   style={styles.editButton}
@@ -280,7 +346,7 @@ export default function DiaryScreen({ route, navigation }) {
             {isEditingEntry ? (
               <TextInput
                 style={styles.editDescriptionInput}
-                placeholder="Description (optionnelle)"
+                placeholder={t.descriptionOptional}
                 value={editedDescription}
                 onChangeText={setEditedDescription}
                 multiline
@@ -290,12 +356,15 @@ export default function DiaryScreen({ route, navigation }) {
               />
             ) : (
               selectedEntry?.description && (
-                <Text style={styles.detailDescription}>{selectedEntry.description}</Text>
+                <Text style={[
+                  styles.detailDescription,
+                  getFontFamily(fontItems) && { fontFamily: getFontFamily(fontItems) }
+                ]}>{selectedEntry.description}</Text>
               )
             )}
 
             <Text style={styles.detailDate}>
-              {selectedEntry?.createdAt && new Date(selectedEntry.createdAt).toLocaleDateString('fr-FR', {
+              {selectedEntry?.createdAt && new Date(selectedEntry.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
                 weekday: 'long',
                 year: 'numeric',
                 month: 'long',
@@ -311,14 +380,14 @@ export default function DiaryScreen({ route, navigation }) {
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={cancelEditingEntry}
                 >
-                  <Text style={styles.cancelButtonText}>Annuler</Text>
+                  <Text style={styles.cancelButtonText}>{t.cancel}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.modalButton, styles.confirmButton, { backgroundColor: themeColor }]}
                   onPress={saveEditedEntry}
                 >
-                  <Text style={styles.confirmButtonText}>Sauvegarder</Text>
+                  <Text style={styles.confirmButtonText}>{t.save}</Text>
                 </TouchableOpacity>
               </View>
             ) : (

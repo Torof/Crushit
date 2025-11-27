@@ -10,17 +10,26 @@ import {
   Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { isPasswordSet, setPassword, verifyPassword } from '../utils/storage';
+import { isPasswordSet, setPassword, verifyPassword, loadLanguage } from '../utils/storage';
+import { translations } from '../utils/translations';
 
 export default function LockScreen({ onUnlock }) {
   const [password, setPasswordInput] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [language, setLanguage] = useState('fr');
+  const t = translations[language];
 
   useEffect(() => {
     checkPasswordStatus();
+    loadLang();
   }, []);
+
+  const loadLang = async () => {
+    const savedLanguage = await loadLanguage();
+    setLanguage(savedLanguage);
+  };
 
   const checkPasswordStatus = async () => {
     const hasPassword = await isPasswordSet();
@@ -31,18 +40,18 @@ export default function LockScreen({ onUnlock }) {
     if (isSettingUp) {
       // Setting up new password
       if (password.length < 4) {
-        Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 4 caractères');
+        Alert.alert(t.error, t.passwordMinCharsNew);
         return;
       }
 
       if (password !== confirmPassword) {
-        Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
+        Alert.alert(t.error, t.passwordsDontMatch);
         return;
       }
 
       try {
         await setPassword(password);
-        Alert.alert('Succès', 'Mot de passe créé avec succès', [
+        Alert.alert(t.success, t.passwordCreated, [
           {
             text: 'OK',
             onPress: () => {
@@ -53,7 +62,7 @@ export default function LockScreen({ onUnlock }) {
           },
         ]);
       } catch (error) {
-        Alert.alert('Erreur', 'Impossible de créer le mot de passe');
+        Alert.alert(t.error, t.unableToCreatePassword);
       }
     } else {
       // Verifying password
@@ -63,7 +72,7 @@ export default function LockScreen({ onUnlock }) {
         setPasswordInput('');
         onUnlock();
       } else {
-        Alert.alert('Erreur', 'Mot de passe incorrect');
+        Alert.alert(t.error, t.incorrectPassword);
         setPasswordInput('');
       }
     }
@@ -80,19 +89,19 @@ export default function LockScreen({ onUnlock }) {
         </View>
 
         <Text style={styles.title}>
-          {isSettingUp ? 'Créer un mot de passe' : 'Déverrouiller l\'application'}
+          {isSettingUp ? t.createPassword : t.unlockApp}
         </Text>
 
         {isSettingUp && (
           <Text style={styles.subtitle}>
-            Protégez vos données avec un mot de passe
+            {t.protectYourData}
           </Text>
         )}
 
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Mot de passe"
+            placeholder={t.password}
             value={password}
             onChangeText={setPasswordInput}
             secureTextEntry={!showPassword}
@@ -116,7 +125,7 @@ export default function LockScreen({ onUnlock }) {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Confirmer le mot de passe"
+              placeholder={t.confirmNewPassword}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry={!showPassword}
@@ -132,13 +141,13 @@ export default function LockScreen({ onUnlock }) {
           onPress={handleSubmit}
         >
           <Text style={styles.submitButtonText}>
-            {isSettingUp ? 'Créer' : 'Déverrouiller'}
+            {isSettingUp ? t.create : t.unlock}
           </Text>
         </TouchableOpacity>
 
         {isSettingUp && (
           <Text style={styles.hint}>
-            Minimum 4 caractères
+            {t.minimum4Chars}
           </Text>
         )}
       </View>

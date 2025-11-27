@@ -39,6 +39,26 @@ jest.mock('expo-linear-gradient', () => ({
   LinearGradient: require('react-native').View,
 }));
 
+// Mock Expo Image Picker
+jest.mock('expo-image-picker', () => ({
+  requestMediaLibraryPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+  launchImageLibraryAsync: jest.fn(() => Promise.resolve({ canceled: true })),
+}));
+
+// Mock React Navigation hooks
+jest.mock('@react-navigation/native', () => {
+  const actualNav = jest.requireActual('@react-navigation/native');
+  return {
+    ...actualNav,
+    useFocusEffect: jest.fn(() => {}), // Don't call the callback in tests
+    useNavigation: () => ({
+      navigate: jest.fn(),
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+    }),
+  };
+});
+
 // Mock DevMenu (SDK 55 canary issue)
 jest.mock('react-native/src/private/devsupport/devmenu/DevMenu', () => ({
   show: jest.fn(),

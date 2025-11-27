@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -16,7 +17,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
 import { useFonts, DancingScript_400Regular, DancingScript_700Bold } from '@expo-google-fonts/dancing-script';
-import { loadCrushes, saveCrushes, clearAllCrushes, sanitizeInput, loadThemeColor, saveThemeColor, loadBackgroundColor, saveBackgroundColor, loadColorPresets, saveColorPresets, isPasswordSet, setPassword, verifyPassword, removePassword } from '../utils/storage';
+import { loadCrushes, saveCrushes, clearAllCrushes, sanitizeInput, loadThemeColor, saveThemeColor, loadBackgroundColor, saveBackgroundColor, loadColorPresets, saveColorPresets, isPasswordSet, setPassword, verifyPassword, removePassword, AVAILABLE_FONTS, loadFontNames, saveFontNames, loadFontHeaders, saveFontHeaders, loadFontItems, saveFontItems, loadFontTitles, saveFontTitles, getFontFamily, loadLanguage, saveLanguage } from '../utils/storage';
+import { translations, oracleMessages } from '../utils/translations';
 
 export default function CrushListScreen({ navigation }) {
   // Load font
@@ -50,6 +52,15 @@ export default function CrushListScreen({ navigation }) {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [hasPassword, setHasPassword] = useState(false);
 
+  // Font management
+  const [fontPickerVisible, setFontPickerVisible] = useState(false);
+  const [fontNames, setFontNames] = useState('DancingScript');
+  const [fontHeaders, setFontHeaders] = useState('DancingScript');
+  const [fontItems, setFontItems] = useState('System');
+  const [fontTitles, setFontTitles] = useState('DancingScript');
+  const [selectedFontCategory, setSelectedFontCategory] = useState('names'); // 'names', 'headers', 'items', or 'titles'
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+
   // Easter egg: Secret revival feature
   const [tapCount, setTapCount] = useState(0);
   const [revivalModalVisible, setRevivalModalVisible] = useState(false);
@@ -61,6 +72,11 @@ export default function CrushListScreen({ navigation }) {
   const [draggingId, setDraggingId] = useState(null);
   const [dragOrder, setDragOrder] = useState([]);
   const [hoverIndex, setHoverIndex] = useState(null);
+
+  // Language management
+  const [language, setLanguage] = useState('fr');
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const t = translations[language];
 
   const scrollOffsetRef = useRef(0);
   const itemHeightRef = useRef(100); // Estimated, will be measured
@@ -96,13 +112,20 @@ export default function CrushListScreen({ navigation }) {
       headerStyle: {
         backgroundColor: themeColor,
       },
-      headerTitle: () => (
-        <TouchableOpacity onPress={handleHeaderTap}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
-            💕 Vie des Crush
-          </Text>
-        </TouchableOpacity>
-      ),
+      headerTitle: () => {
+        const customFont = getFontFamily(fontHeaders);
+        return (
+          <TouchableOpacity onPress={handleHeaderTap}>
+            <Text style={{
+              fontSize: 18,
+              color: '#fff',
+              ...(customFont ? { fontFamily: customFont } : { fontWeight: 'bold' })
+            }}>
+              {t.appTitle}
+            </Text>
+          </TouchableOpacity>
+        );
+      },
       headerRight: () => (
         <TouchableOpacity
           style={{ marginRight: 15, padding: 8 }}
@@ -113,7 +136,7 @@ export default function CrushListScreen({ navigation }) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, tapCount, themeColor]);
+  }, [navigation, tapCount, themeColor, fontHeaders, t]);
 
   // Easter egg: Handle header tap for secret revival
   const handleHeaderTap = () => {
@@ -125,7 +148,7 @@ export default function CrushListScreen({ navigation }) {
       if (destroyedCrushes.length > 0) {
         setRevivalModalVisible(true);
       } else {
-        Alert.alert('Secret découvert !', 'Mais il n\'y a personne dans le cimetière...');
+        Alert.alert(t.secretDiscovered, t.noOneInCemetery);
       }
     }
 
@@ -163,6 +186,20 @@ export default function CrushListScreen({ navigation }) {
     // Check if password is set
     const passwordSet = await isPasswordSet();
     setHasPassword(passwordSet);
+
+    // Load fonts
+    const savedFontNames = await loadFontNames();
+    setFontNames(savedFontNames);
+    const savedFontHeaders = await loadFontHeaders();
+    setFontHeaders(savedFontHeaders);
+    const savedFontItems = await loadFontItems();
+    setFontItems(savedFontItems);
+    const savedFontTitles = await loadFontTitles();
+    setFontTitles(savedFontTitles);
+
+    // Load language
+    const savedLanguage = await loadLanguage();
+    setLanguage(savedLanguage);
   };
 
   const addCrush = async () => {
@@ -170,7 +207,7 @@ export default function CrushListScreen({ navigation }) {
     const sanitizedDescription = sanitizeInput(newCrushDescription);
 
     if (sanitizedName === '') {
-      Alert.alert('Erreur', 'Veuillez entrer un nom valide');
+      Alert.alert(t.error, t.enterValidName);
       return;
     }
 
@@ -198,18 +235,18 @@ export default function CrushListScreen({ navigation }) {
       setNewCrushDescription('');
       setModalVisible(false);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder les données');
+      Alert.alert(t.error, t.unableToSave);
     }
   };
 
   const deleteCrush = async (id) => {
     Alert.alert(
-      'Supprimer le Crush',
-      'Êtes-vous sûr de vouloir supprimer ce crush ?',
+      t.deleteCrush,
+      t.confirmDeleteCrush,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t.cancel, style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t.delete,
           style: 'destructive',
           onPress: async () => {
             const updatedCrushes = crushes.filter(c => c.id !== id);
@@ -223,12 +260,12 @@ export default function CrushListScreen({ navigation }) {
 
   const clearAllData = () => {
     Alert.alert(
-      'Effacer toutes les données',
-      'Êtes-vous sûr de vouloir supprimer tous les crushes ?',
+      t.clearAllData,
+      t.confirmClearAll,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t.cancel, style: 'cancel' },
         {
-          text: 'Tout effacer',
+          text: t.clearAll,
           style: 'destructive',
           onPress: async () => {
             await clearAllCrushes();
@@ -290,32 +327,32 @@ export default function CrushListScreen({ navigation }) {
     if (hasPassword) {
       // Changing password
       if (currentPassword === '') {
-        Alert.alert('Erreur', 'Veuillez entrer votre mot de passe actuel');
+        Alert.alert(t.error, t.enterCurrentPassword);
         return;
       }
 
       const isValid = await verifyPassword(currentPassword);
       if (!isValid) {
-        Alert.alert('Erreur', 'Mot de passe actuel incorrect');
+        Alert.alert(t.error, t.incorrectCurrentPassword);
         return;
       }
 
       if (newPassword === '') {
         // Remove password
         Alert.alert(
-          'Supprimer le mot de passe',
-          'Êtes-vous sûr de vouloir supprimer le mot de passe ?',
+          t.deletePassword,
+          t.confirmDeletePassword,
           [
-            { text: 'Annuler', style: 'cancel' },
+            { text: t.cancel, style: 'cancel' },
             {
-              text: 'Supprimer',
+              text: t.delete,
               style: 'destructive',
               onPress: async () => {
                 await removePassword();
                 setHasPassword(false);
                 setCurrentPassword('');
                 setPasswordModalVisible(false);
-                Alert.alert('Succès', 'Mot de passe supprimé');
+                Alert.alert(t.success, t.passwordDeleted);
               },
             },
           ]
@@ -324,12 +361,12 @@ export default function CrushListScreen({ navigation }) {
       }
 
       if (newPassword.length < 4) {
-        Alert.alert('Erreur', 'Le nouveau mot de passe doit contenir au moins 4 caractères');
+        Alert.alert(t.error, t.passwordMinChars);
         return;
       }
 
       if (newPassword !== confirmNewPassword) {
-        Alert.alert('Erreur', 'Les nouveaux mots de passe ne correspondent pas');
+        Alert.alert(t.error, t.passwordsDontMatch);
         return;
       }
 
@@ -338,16 +375,16 @@ export default function CrushListScreen({ navigation }) {
       setNewPassword('');
       setConfirmNewPassword('');
       setPasswordModalVisible(false);
-      Alert.alert('Succès', 'Mot de passe modifié avec succès');
+      Alert.alert(t.success, t.passwordChanged);
     } else {
       // Setting new password
       if (newPassword.length < 4) {
-        Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 4 caractères');
+        Alert.alert(t.error, t.passwordMinCharsNew);
         return;
       }
 
       if (newPassword !== confirmNewPassword) {
-        Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
+        Alert.alert(t.error, t.passwordsDontMatch);
         return;
       }
 
@@ -356,8 +393,41 @@ export default function CrushListScreen({ navigation }) {
       setNewPassword('');
       setConfirmNewPassword('');
       setPasswordModalVisible(false);
-      Alert.alert('Succès', 'Mot de passe créé avec succès');
+      Alert.alert(t.success, t.passwordCreated);
     }
+  };
+
+  // Font management functions
+  const openFontPicker = () => {
+    setSettingsModalVisible(false);
+    setFontPickerVisible(true);
+  };
+
+  const selectFont = async (fontId, category) => {
+    if (category === 'names') {
+      setFontNames(fontId);
+      await saveFontNames(fontId);
+    } else if (category === 'headers') {
+      setFontHeaders(fontId);
+      await saveFontHeaders(fontId);
+    } else if (category === 'items') {
+      setFontItems(fontId);
+      await saveFontItems(fontId);
+    } else if (category === 'titles') {
+      setFontTitles(fontId);
+      await saveFontTitles(fontId);
+    }
+  };
+
+  const resetFonts = async () => {
+    setFontNames('DancingScript');
+    setFontHeaders('DancingScript');
+    setFontItems('System');
+    setFontTitles('DancingScript');
+    await saveFontNames('DancingScript');
+    await saveFontHeaders('DancingScript');
+    await saveFontItems('System');
+    await saveFontTitles('DancingScript');
   };
 
   const resetColor = async () => {
@@ -408,7 +478,7 @@ export default function CrushListScreen({ navigation }) {
   // Easter egg: Relationship Oracle
   const openOracle = () => {
     if (crushes.length === 0) {
-      Alert.alert('🔮 Oracle', 'Ajoute des crushes d\'abord !');
+      Alert.alert(t.oracle, t.addCrushesFirst);
       return;
     }
 
@@ -435,89 +505,91 @@ export default function CrushListScreen({ navigation }) {
     // Cemetery rate
     const cemeteryRate = destroyedCount > 0 ? Math.round((destroyedCount / total) * 100) : 0;
 
+    const om = oracleMessages[language];
+
     // Generate messages based on stats
     const messages = [
       // Feelings-based
-      avgFeelings > 70 ? "Niveau de sentiments élevé ! T'es plutôt optimiste 💕" : null,
-      avgFeelings < 30 ? "Niveau de sentiments bas... Faut peut-être faire le tri ? 😅" : null,
-      avgFeelings >= 80 ? "80%+ de sentiments ? Tu planes complètement ! ☁️" : null,
-      avgFeelings >= 50 && avgFeelings <= 55 ? "Pile au milieu... T'es neutre ou indécis(e) ? 🤷" : null,
-      avgFeelings < 40 && total >= 3 ? "Sentiments faibles partout... Ça va ? 🥺" : null,
+      avgFeelings > 70 ? om.highFeelings : null,
+      avgFeelings < 30 ? om.lowFeelings : null,
+      avgFeelings >= 80 ? om.veryHighFeelings : null,
+      avgFeelings >= 50 && avgFeelings <= 55 ? om.neutralFeelings : null,
+      avgFeelings < 40 && total >= 3 ? om.lowFeelingsMultiple : null,
 
       // Qualities vs Defects
-      totalQualities > totalDefects * 2 ? "Beaucoup plus de qualités que de défauts, bon œil ! ✨" : null,
-      totalDefects > totalQualities * 2 ? "Plus de défauts que de qualités... Exigeant(e) ou réaliste ? 🤔" : null,
-      totalQualities === totalDefects && totalQualities > 0 ? "Parfait équilibre qualités/défauts. Philosophe ? ⚖️" : null,
-      totalQualities === 0 && totalDefects === 0 && total >= 2 ? "Aucune qualité ni défaut notés ? Mystérieux... 🕵️" : null,
-      totalQualities > 20 ? "Plus de 20 qualités notées ! T'es fan de tout le monde 😍" : null,
-      totalDefects > 20 ? "Plus de 20 défauts... T'as un œil critique hein 👁️" : null,
-      totalQualities > 0 && totalDefects === 0 ? "Que des qualités, aucun défaut ? Bisounours ! 🦄" : null,
-      totalDefects > 0 && totalQualities === 0 ? "Que des défauts ? Pessimiste du jour ! 😈" : null,
+      totalQualities > totalDefects * 2 ? om.moreQualities : null,
+      totalDefects > totalQualities * 2 ? om.moreDefects : null,
+      totalQualities === totalDefects && totalQualities > 0 ? om.balancedTraits : null,
+      totalQualities === 0 && totalDefects === 0 && total >= 2 ? om.noTraits : null,
+      totalQualities > 20 ? om.manyQualities : null,
+      totalDefects > 20 ? om.manyDefects : null,
+      totalQualities > 0 && totalDefects === 0 ? om.onlyQualities : null,
+      totalDefects > 0 && totalQualities === 0 ? om.onlyDefects : null,
 
       // Cemetery stats
-      destroyedCount === 0 && total >= 3 ? "Aucun game over ! Champion(ne) de la patience 🏆" : null,
-      destroyedCount >= 3 ? `${destroyedCount} au cimetière... Aïe aïe aïe 😅` : null,
-      cemeteryRate >= 50 && total >= 4 ? `${cemeteryRate}% de taux de game over... C'est corsé ! 💀` : null,
-      destroyedCount === 1 && total > 5 ? "Un seul au cimetière sur beaucoup... Pas mal ! 👍" : null,
-      destroyedCount >= 5 ? `${destroyedCount} game over... C'est un massacre ! 🏴‍☠️` : null,
-      destroyedCount === total && total >= 2 ? "Tous au cimetière... T'es maudit(e) ou quoi ? 💀" : null,
+      destroyedCount === 0 && total >= 3 ? om.noCemetery : null,
+      destroyedCount >= 3 ? `${destroyedCount} ${om.manyCemetery}` : null,
+      cemeteryRate >= 50 && total >= 4 ? `${cemeteryRate}% ${om.highCemeteryRate}` : null,
+      destroyedCount === 1 && total > 5 ? om.oneCemetery : null,
+      destroyedCount >= 5 ? `${destroyedCount} ${om.massiveCemetery}` : null,
+      destroyedCount === total && total >= 2 ? om.allCemetery : null,
 
       // Active vs Archived
-      archivedCount > activeCount && archivedCount >= 2 ? "Plus de relations en pause qu'actives... On prend son temps ! ⏸️" : null,
-      activeCount >= 5 ? "5+ relations actives ? T'es ambitieux(se) ! 🎯" : null,
-      activeCount === 0 && archivedCount > 0 ? "Aucune relation active ? C'est la pause générale ! 💤" : null,
-      activeCount === 1 && total >= 5 ? "Un seul actif sur beaucoup... Focus total ! 🎯" : null,
-      archivedCount >= 5 ? `${archivedCount} relations en pause... Tu réfléchis beaucoup ! 🤔` : null,
-      activeCount === total && total >= 3 ? "Tout le monde est actif ! C'est l'effervescence 🔥" : null,
+      archivedCount > activeCount && archivedCount >= 2 ? om.moreArchived : null,
+      activeCount >= 5 ? om.manyActive : null,
+      activeCount === 0 && archivedCount > 0 ? om.noActive : null,
+      activeCount === 1 && total >= 5 ? om.onlyOneActive : null,
+      archivedCount >= 5 ? `${archivedCount} ${om.manyArchived}` : null,
+      activeCount === total && total >= 3 ? om.allActive : null,
 
       // Actions
-      totalGoodActions > totalBadActions * 3 ? "Que des bonnes actions ! Optimiste ou amnésique ? 😇" : null,
-      totalBadActions > totalGoodActions * 2 ? "Beaucoup d'erreurs notées... T'oublies rien toi ! 📝" : null,
-      totalGoodActions === 0 && totalBadActions > 0 ? "Aucune bonne action ? Dur dur... 😬" : null,
-      totalBadActions === 0 && totalGoodActions > 0 ? "Aucune mauvaise action ? Parfait ! 😇" : null,
-      totalGoodActions > 30 ? "Plus de 30 bonnes actions ! T'es généreux(se) 💚" : null,
-      totalBadActions > 30 ? "Plus de 30 mauvaises actions notées... Ça fait beaucoup ! 😰" : null,
-      totalGoodActions === totalBadActions && totalGoodActions > 0 ? "Autant de bon que de mauvais... Équilibré ! ⚖️" : null,
+      totalGoodActions > totalBadActions * 3 ? om.manyGoodActions : null,
+      totalBadActions > totalGoodActions * 2 ? om.manyBadActions : null,
+      totalGoodActions === 0 && totalBadActions > 0 ? om.noGoodActions : null,
+      totalBadActions === 0 && totalGoodActions > 0 ? om.noBadActions : null,
+      totalGoodActions > 30 ? om.lotsOfGoodActions : null,
+      totalBadActions > 30 ? om.lotsOfBadActions : null,
+      totalGoodActions === totalBadActions && totalGoodActions > 0 ? om.balancedActions : null,
 
       // Total count
-      total === 1 ? "Un seul crush... Fidèle ou débutant(e) ? 💝" : null,
-      total === 2 ? "Deux crushes... Le duo parfait ou l'hésitation ? 👥" : null,
-      total === 3 ? "Trois crushes... Le chiffre magique ! 🎩" : null,
-      total >= 10 ? `${total} crushes ! T'as du succès ou tu collectionnes ? 🌟` : null,
-      total >= 15 ? `${total} relations... C'est une base de données ! 📊` : null,
-      total >= 20 ? `${total} crushes ?! T'es sérieux(se) là ? 🤯` : null,
+      total === 1 ? om.oneCrush : null,
+      total === 2 ? om.twoCrushes : null,
+      total === 3 ? om.threeCrushes : null,
+      total >= 10 ? `${total} ${om.manyCrushes}` : null,
+      total >= 15 ? `${total} ${om.lotsCrushes}` : null,
+      total >= 20 ? `${total} ${om.tooManyCrushes}` : null,
 
       // Detailed knowledge
-      crushes.some(c => (c.qualities?.length || 0) + (c.defects?.length || 0) >= 10) ? "Y'a quelqu'un que tu connais TRÈS bien par ici 👀" : null,
-      crushes.some(c => (c.qualities?.length || 0) + (c.defects?.length || 0) >= 15) ? "15+ traits sur quelqu'un ? C'est ton âme sœur ou ton pire ennemi ! 😅" : null,
-      crushes.some(c => (c.pros?.length || 0) + (c.cons?.length || 0) >= 20) ? "20+ actions notées pour quelqu'un... T'as un dossier complet ! 📁" : null,
-      crushes.every(c => (c.pros?.length || 0) + (c.cons?.length || 0) < 2) ? "Peu d'actions notées... Tu débutes ou tu observes ? 👀" : null,
+      crushes.some(c => (c.qualities?.length || 0) + (c.defects?.length || 0) >= 10) ? om.knowSomeoneWell : null,
+      crushes.some(c => (c.qualities?.length || 0) + (c.defects?.length || 0) >= 15) ? om.knowSomeoneVeryWell : null,
+      crushes.some(c => (c.pros?.length || 0) + (c.cons?.length || 0) >= 20) ? om.manyActionsOnSomeone : null,
+      crushes.every(c => (c.pros?.length || 0) + (c.cons?.length || 0) < 2) ? om.fewActions : null,
 
       // Feelings patterns
-      crushes.every(c => (c.feelings ?? 50) > 60) ? "Que des hauts niveaux de sentiments ! L'amour est dans l'air 💖" : null,
-      crushes.every(c => (c.feelings ?? 50) < 40) ? "Tous en dessous de 40%... Période difficile ? 😔" : null,
-      crushes.some(c => (c.feelings ?? 50) === 100) ? "Quelqu'un à 100% ! Coup de foudre total ! ⚡" : null,
-      crushes.some(c => (c.feelings ?? 50) === 0) ? "Quelqu'un à 0%... Pourquoi tu le gardes ?! 😂" : null,
-      crushes.filter(c => (c.feelings ?? 50) >= 80).length >= 3 ? "3+ personnes au-dessus de 80% ? T'es populaire ! 🌟" : null,
+      crushes.every(c => (c.feelings ?? 50) > 60) ? om.allHighFeelings : null,
+      crushes.every(c => (c.feelings ?? 50) < 40) ? om.allLowFeelings : null,
+      crushes.some(c => (c.feelings ?? 50) === 100) ? om.someone100 : null,
+      crushes.some(c => (c.feelings ?? 50) === 0) ? om.someone0 : null,
+      crushes.filter(c => (c.feelings ?? 50) >= 80).length >= 3 ? om.manyHigh : null,
 
       // Mixed stats
-      activeCount >= 3 && destroyedCount === 0 ? "Plusieurs actifs, aucun échec... T'assures ! 💪" : null,
-      archivedCount === 0 && destroyedCount === 0 && total >= 4 ? "Aucune pause ni game over ? Maître du jeu ! 🎮" : null,
-      totalGoodActions > 0 && totalBadActions === 0 && total >= 2 ? "Que des bonnes vibes ! Idéaliste ? 🌈" : null,
-      cemeteryRate < 20 && total >= 5 ? "Moins de 20% d'échecs... Bon taux de réussite ! 📈" : null,
-      avgFeelings > 65 && destroyedCount <= 1 ? "Sentiments élevés et peu d'échecs... Chanceux(se) ! 🍀" : null,
+      activeCount >= 3 && destroyedCount === 0 ? om.activeNoFails : null,
+      archivedCount === 0 && destroyedCount === 0 && total >= 4 ? om.masterOfGame : null,
+      totalGoodActions > 0 && totalBadActions === 0 && total >= 2 ? om.onlyGoodVibes : null,
+      cemeteryRate < 20 && total >= 5 ? om.lowFailRate : null,
+      avgFeelings > 65 && destroyedCount <= 1 ? om.lucky : null,
 
       // Funny observations
-      crushes.some(c => c.description && c.description.length > 200) ? "Y'a une description de roman quelque part ! 📖" : null,
-      crushes.filter(c => c.mistakes >= 3).length >= 2 ? "Plusieurs personnes à 3+ erreurs... Zone dangereuse ! ⚠️" : null,
-      crushes.every(c => c.name.length < 5) && total >= 2 ? "Que des noms courts... Tu vas à l'essentiel ! ⚡" : null,
-      total >= 3 && totalGoodActions + totalBadActions < 5 ? "Peu d'actions notées... Tu préfères observer ? 🧐" : null,
+      crushes.some(c => c.description && c.description.length > 200) ? om.longDescription : null,
+      crushes.filter(c => c.mistakes >= 3).length >= 2 ? om.dangerZone : null,
+      crushes.every(c => c.name.length < 5) && total >= 2 ? om.shortNames : null,
+      total >= 3 && totalGoodActions + totalBadActions < 5 ? om.observer : null,
     ].filter(Boolean);
 
     // Pick a random message or default
     const selectedMessage = messages.length > 0
       ? messages[Math.floor(Math.random() * messages.length)]
-      : "Les étoiles sont alignées... mais elles ont rien à dire ! 🌟";
+      : t.starsAligned;
 
     setOracleMessage(selectedMessage);
     setOracleModalVisible(true);
@@ -529,15 +601,15 @@ export default function CrushListScreen({ navigation }) {
 
     // Check if max revivals reached
     if (revivalCount >= 2) {
-      Alert.alert('😱', 'Désolé mais on peut pas te laisser faire ça !!');
+      Alert.alert('😱', t.cantLetYouDoThis);
       return;
     }
 
     // Show warning alert
-    Alert.alert('⚠️', "C'est vraiment pas une bonne idée...", [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert('⚠️', t.notAGoodIdea, [
+      { text: t.cancel, style: 'cancel' },
       {
-        text: 'Continuer quand même',
+        text: t.continueAnyway,
         style: 'destructive',
         onPress: async () => {
           try {
@@ -552,9 +624,9 @@ export default function CrushListScreen({ navigation }) {
             setRevivalCount(newCount);
             await AsyncStorage.setItem('@revival_count', newCount.toString());
 
-            Alert.alert('🎉', 'Résurrection réussie ! Mais fais attention...');
+            Alert.alert('🎉', t.revivalSuccess);
           } catch (error) {
-            Alert.alert('Erreur', 'Impossible de ressusciter ce crush');
+            Alert.alert(t.error, t.unableToRevive);
           }
         },
       },
@@ -609,11 +681,11 @@ export default function CrushListScreen({ navigation }) {
     return (
       <TouchableOpacity
         style={styles.crushCard}
-        onPress={() => navigation.navigate('CrushDetail', { crushId: item.id })}
+        onPress={() => navigation.navigate('CrushDetail', { crushId: item.id, language })}
         onLongPress={() => deleteCrush(item.id)}
       >
         <View style={styles.crushCardContent}>
-          <Text style={styles.crushName}>{item.name}</Text>
+          <Text style={[styles.crushName, getFontFamily(fontNames) && { fontFamily: getFontFamily(fontNames) }]}>{item.name}</Text>
           <View style={styles.heartContainer}>
             {[...Array(5)].map((_, idx) => (
               <Text key={idx} style={styles.heartIcon}>
@@ -632,12 +704,12 @@ export default function CrushListScreen({ navigation }) {
         style={styles.cemeteryItem}
         onPress={() => {
           setCemeteryModalVisible(false);
-          navigation.navigate('CrushDetail', { crushId: item.id });
+          navigation.navigate('CrushDetail', { crushId: item.id, language });
         }}
       >
         <Text style={styles.cemeteryName}>☠️ {item.name}</Text>
         <Text style={styles.cemeteryDate}>
-          {new Date(item.createdAt).toLocaleDateString('fr-FR')}
+          {new Date(item.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}
         </Text>
       </TouchableOpacity>
     );
@@ -645,14 +717,14 @@ export default function CrushListScreen({ navigation }) {
 
   const renderArchivedCrush = ({ item }) => {
     const statusIcon = item.status === 'ended' ? '💔' : '⏸️';
-    const statusText = item.status === 'ended' ? 'Terminé' : 'En pause';
+    const statusText = item.status === 'ended' ? t.ended : t.onHold;
 
     return (
       <TouchableOpacity
         style={styles.archiveItem}
         onPress={() => {
           setArchiveModalVisible(false);
-          navigation.navigate('CrushDetail', { crushId: item.id });
+          navigation.navigate('CrushDetail', { crushId: item.id, language });
         }}
       >
         <View style={styles.archiveItemContent}>
@@ -660,7 +732,7 @@ export default function CrushListScreen({ navigation }) {
           <Text style={styles.archiveStatus}>{statusText}</Text>
         </View>
         <Text style={styles.archiveDate}>
-          {new Date(item.createdAt).toLocaleDateString('fr-FR')}
+          {new Date(item.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}
         </Text>
       </TouchableOpacity>
     );
@@ -764,9 +836,9 @@ export default function CrushListScreen({ navigation }) {
       {/* Reorder Mode Banner */}
       {reorderMode && (
         <View style={styles.reorderBanner}>
-          <Text style={styles.reorderBannerText}>Maintenez et glissez pour réorganiser</Text>
+          <Text style={styles.reorderBannerText}>{t.holdAndDragToReorder}</Text>
           <TouchableOpacity onPress={toggleReorderMode}>
-            <Text style={styles.reorderBannerButton}>Terminer</Text>
+            <Text style={styles.reorderBannerButton}>{t.finish}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -788,8 +860,8 @@ export default function CrushListScreen({ navigation }) {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Aucun crush pour l'instant</Text>
-              <Text style={styles.emptySubtext}>Utilisez la barre de navigation</Text>
+              <Text style={styles.emptyText}>{t.noCrushYet}</Text>
+              <Text style={styles.emptySubtext}>{t.useNavBar}</Text>
             </View>
           }
         />
@@ -815,11 +887,11 @@ export default function CrushListScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Ajouter un Nouveau Crush</Text>
+            <Text style={styles.modalTitle}>{t.addNewCrush}</Text>
 
             <TextInput
               style={styles.input}
-              placeholder="Nom"
+              placeholder={t.name}
               value={newCrushName}
               onChangeText={setNewCrushName}
               autoFocus
@@ -828,7 +900,7 @@ export default function CrushListScreen({ navigation }) {
 
             <TextInput
               style={styles.inputDescription}
-              placeholder="Description (optionnelle)"
+              placeholder={t.descriptionOptional}
               value={newCrushDescription}
               onChangeText={setNewCrushDescription}
               multiline
@@ -845,16 +917,16 @@ export default function CrushListScreen({ navigation }) {
                   setModalVisible(false);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
+                <Text style={styles.cancelButtonText}>{t.cancel}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.modalButton, styles.confirmButton]}
                 onPress={addCrush}
                 testID="modal-add-crush-button"
-                accessibilityLabel="Ajouter le crush"
+                accessibilityLabel={t.add}
               >
-                <Text style={styles.confirmButtonText}>Ajouter</Text>
+                <Text style={styles.confirmButtonText}>{t.add}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -870,7 +942,7 @@ export default function CrushListScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, styles.cemeteryModal]}>
-            <Text style={styles.modalTitle}>🪦 Cimetière des Crushes</Text>
+            <Text style={styles.modalTitle}>{t.cemeteryTitle}</Text>
 
             <FlatList
               data={destroyedCrushes}
@@ -879,7 +951,7 @@ export default function CrushListScreen({ navigation }) {
               style={styles.cemeteryList}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>Aucun crush game over</Text>
+                  <Text style={styles.emptyText}>{t.noCrushGameOver}</Text>
                 </View>
               }
             />
@@ -888,7 +960,7 @@ export default function CrushListScreen({ navigation }) {
               style={[styles.modalButton, styles.confirmButton, styles.closeCemeteryButton]}
               onPress={() => setCemeteryModalVisible(false)}
             >
-              <Text style={styles.confirmButtonText}>Fermer</Text>
+              <Text style={styles.confirmButtonText}>{t.close}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -903,7 +975,7 @@ export default function CrushListScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, styles.archiveModal]}>
-            <Text style={styles.modalTitle}>📁 Archive des Relations</Text>
+            <Text style={styles.modalTitle}>{t.archiveTitle}</Text>
 
             <FlatList
               data={archivedCrushes}
@@ -912,7 +984,7 @@ export default function CrushListScreen({ navigation }) {
               style={styles.archiveList}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>Aucune relation archivée</Text>
+                  <Text style={styles.emptyText}>{t.noArchivedRelation}</Text>
                 </View>
               }
             />
@@ -921,7 +993,7 @@ export default function CrushListScreen({ navigation }) {
               style={[styles.modalButton, styles.confirmButton, styles.closeCemeteryButton]}
               onPress={() => setArchiveModalVisible(false)}
             >
-              <Text style={styles.confirmButtonText}>Fermer</Text>
+              <Text style={styles.confirmButtonText}>{t.close}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -936,83 +1008,111 @@ export default function CrushListScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.settingsModalContent}>
-            <TouchableOpacity
-              style={styles.settingsOption}
-              onPress={() => {
-                setSettingsModalVisible(false);
-                setCemeteryModalVisible(true);
-              }}
-            >
-              <Text style={styles.settingsOptionIcon}>🪦</Text>
-              <View style={styles.settingsOptionTextContainer}>
-                <Text style={styles.settingsOptionTitle}>Cimetière</Text>
-                {destroyedCrushes.length > 0 && (
-                  <Text style={styles.settingsOptionSubtitle}>{destroyedCrushes.length} crush{destroyedCrushes.length > 1 ? 'es' : ''} game over</Text>
-                )}
-              </View>
-            </TouchableOpacity>
+            <ScrollView showsVerticalScrollIndicator={true} style={styles.settingsScrollView}>
+              <TouchableOpacity
+                style={styles.settingsOption}
+                onPress={() => {
+                  setSettingsModalVisible(false);
+                  setCemeteryModalVisible(true);
+                }}
+              >
+                <Text style={styles.settingsOptionIcon}>🪦</Text>
+                <View style={styles.settingsOptionTextContainer}>
+                  <Text style={styles.settingsOptionTitle}>{t.cemetery}</Text>
+                  {destroyedCrushes.length > 0 && (
+                    <Text style={styles.settingsOptionSubtitle}>{destroyedCrushes.length} {destroyedCrushes.length > 1 ? t.crushesGameOver : t.crushGameOver}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.settingsOption}
-              onPress={() => {
-                setSettingsModalVisible(false);
-                setArchiveModalVisible(true);
-              }}
-            >
-              <Text style={styles.settingsOptionIcon}>📁</Text>
-              <View style={styles.settingsOptionTextContainer}>
-                <Text style={styles.settingsOptionTitle}>Archive</Text>
-                {archivedCrushes.length > 0 && (
-                  <Text style={styles.settingsOptionSubtitle}>{archivedCrushes.length} relation{archivedCrushes.length > 1 ? 's' : ''} archivée{archivedCrushes.length > 1 ? 's' : ''}</Text>
-                )}
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsOption}
+                onPress={() => {
+                  setSettingsModalVisible(false);
+                  setArchiveModalVisible(true);
+                }}
+              >
+                <Text style={styles.settingsOptionIcon}>📁</Text>
+                <View style={styles.settingsOptionTextContainer}>
+                  <Text style={styles.settingsOptionTitle}>{t.archive}</Text>
+                  {archivedCrushes.length > 0 && (
+                    <Text style={styles.settingsOptionSubtitle}>{archivedCrushes.length} {archivedCrushes.length > 1 ? t.archivedRelations : t.archivedRelation}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.settingsOption}
-              onPress={toggleReorderMode}
-            >
-              <Text style={styles.settingsOptionIcon}>↕️</Text>
-              <View style={styles.settingsOptionTextContainer}>
-                <Text style={styles.settingsOptionTitle}>Réorganiser</Text>
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsOption}
+                onPress={toggleReorderMode}
+              >
+                <Text style={styles.settingsOptionIcon}>↕️</Text>
+                <View style={styles.settingsOptionTextContainer}>
+                  <Text style={styles.settingsOptionTitle}>{t.reorder}</Text>
+                </View>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.settingsOption}
-              onPress={openColorPicker}
-            >
-              <Text style={styles.settingsOptionIcon}>🎨</Text>
-              <View style={styles.settingsOptionTextContainer}>
-                <Text style={styles.settingsOptionTitle}>Couleur</Text>
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsOption}
+                onPress={openColorPicker}
+              >
+                <Text style={styles.settingsOptionIcon}>🎨</Text>
+                <View style={styles.settingsOptionTextContainer}>
+                  <Text style={styles.settingsOptionTitle}>{t.color}</Text>
+                </View>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.settingsOption}
-              onPress={openPasswordModal}
-            >
-              <Text style={styles.settingsOptionIcon}>🔒</Text>
-              <View style={styles.settingsOptionTextContainer}>
-                <Text style={styles.settingsOptionTitle}>Mot de passe</Text>
-                {hasPassword && (
-                  <Text style={styles.settingsOptionSubtitle}>Protection activée</Text>
-                )}
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsOption}
+                onPress={openFontPicker}
+              >
+                <Text style={styles.settingsOptionIcon}>🔤</Text>
+                <View style={styles.settingsOptionTextContainer}>
+                  <Text style={styles.settingsOptionTitle}>{t.fonts}</Text>
+                </View>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.settingsOption}
-              onPress={() => {
-                setSettingsModalVisible(false);
-                clearAllData();
-              }}
-            >
-              <Text style={styles.settingsOptionIcon}>🗑️</Text>
-              <View style={styles.settingsOptionTextContainer}>
-                <Text style={[styles.settingsOptionTitle, styles.dangerText]}>Effacer</Text>
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsOption}
+                onPress={() => {
+                  setSettingsModalVisible(false);
+                  setLanguageModalVisible(true);
+                }}
+              >
+                <Text style={styles.settingsOptionIcon}>🌐</Text>
+                <View style={styles.settingsOptionTextContainer}>
+                  <Text style={styles.settingsOptionTitle}>{t.language}</Text>
+                  <Text style={styles.settingsOptionSubtitle}>{language === 'fr' ? 'Français' : 'English'}</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.settingsOption}
+                onPress={openPasswordModal}
+              >
+                <Text style={styles.settingsOptionIcon}>🔒</Text>
+                <View style={styles.settingsOptionTextContainer}>
+                  <Text style={styles.settingsOptionTitle}>{t.password}</Text>
+                  {hasPassword && (
+                    <Text style={styles.settingsOptionSubtitle}>{t.protectionEnabled}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.settingsOption}
+                onPress={() => {
+                  setSettingsModalVisible(false);
+                  clearAllData();
+                }}
+              >
+                <Text style={styles.settingsOptionIcon}>🗑️</Text>
+                <View style={styles.settingsOptionTextContainer}>
+                  <Text style={[styles.settingsOptionTitle, styles.dangerText]}>{t.clear}</Text>
+                </View>
+              </TouchableOpacity>
+            </ScrollView>
+
+            <Text style={styles.scrollIndicator}>▼</Text>
 
             <TouchableOpacity
               style={styles.settingsCloseButton}
@@ -1033,11 +1133,11 @@ export default function CrushListScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, styles.revivalModal]}>
-            <Text style={styles.modalTitle}>🪦 Résurrection Secrète</Text>
+            <Text style={styles.modalTitle}>{t.secretRevival}</Text>
             <Text style={styles.revivalSubtitle}>
               {revivalCount < 2
-                ? `${2 - revivalCount} résurrection${2 - revivalCount > 1 ? 's' : ''} restante${2 - revivalCount > 1 ? 's' : ''}`
-                : 'Plus de résurrections disponibles'}
+                ? `${2 - revivalCount} ${2 - revivalCount > 1 ? t.revivalsRemainingPlural : t.revivalsRemaining}`
+                : t.noMoreRevivals}
             </Text>
 
             <FlatList
@@ -1050,7 +1150,7 @@ export default function CrushListScreen({ navigation }) {
                 >
                   <Text style={styles.revivalName}>☠️ {item.name}</Text>
                   <Text style={styles.revivalDate}>
-                    {new Date(item.createdAt).toLocaleDateString('fr-FR')}
+                    {new Date(item.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1078,7 +1178,7 @@ export default function CrushListScreen({ navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.oracleModalContent}>
             <Text style={styles.oracleIcon}>🔮</Text>
-            <Text style={styles.oracleTitle}>L'Oracle des Relations</Text>
+            <Text style={styles.oracleTitle}>{t.relationshipOracle}</Text>
             <View style={styles.oracleMessageContainer}>
               <Text style={styles.oracleMessage}>{oracleMessage}</Text>
             </View>
@@ -1101,7 +1201,7 @@ export default function CrushListScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.colorPickerModal}>
-            <Text style={styles.modalTitle}>Choisir la couleur</Text>
+            <Text style={styles.modalTitle}>{t.chooseColor}</Text>
 
             <View style={styles.colorPreviewContainer}>
               <View style={[
@@ -1112,7 +1212,7 @@ export default function CrushListScreen({ navigation }) {
 
             {/* Color Presets */}
             <View style={styles.presetsSection}>
-              <Text style={styles.presetsTitle}>Préréglages</Text>
+              <Text style={styles.presetsTitle}>{t.presets}</Text>
               <View style={styles.presetsContainer}>
                 {[0, 1].map((index) => (
                   <View key={index} style={styles.presetSlot}>
@@ -1129,16 +1229,16 @@ export default function CrushListScreen({ navigation }) {
                         <Text style={styles.emptyPresetText}>+</Text>
                       )}
                     </TouchableOpacity>
-                    <Text style={styles.presetLabel}>Slot {index + 1}</Text>
+                    <Text style={styles.presetLabel}>{t.slot} {index + 1}</Text>
                   </View>
                 ))}
               </View>
-              <Text style={styles.presetsHint}>Appui long pour sauvegarder la couleur actuelle</Text>
+              <Text style={styles.presetsHint}>{t.longPressToSave}</Text>
             </View>
 
             {/* Color Type Selection */}
             <View style={styles.colorTypeSection}>
-              <Text style={styles.colorTypeTitle}>Couleur à modifier:</Text>
+              <Text style={styles.colorTypeTitle}>{t.colorToModify}</Text>
               <View style={styles.colorTypeOptions}>
                 <TouchableOpacity
                   style={styles.colorTypeOption}
@@ -1152,7 +1252,7 @@ export default function CrushListScreen({ navigation }) {
                       <Text style={styles.checkmark}>✓</Text>
                     )}
                   </View>
-                  <Text style={styles.colorTypeLabel}>En-tête</Text>
+                  <Text style={styles.colorTypeLabel}>{t.header}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1167,14 +1267,14 @@ export default function CrushListScreen({ navigation }) {
                       <Text style={styles.checkmark}>✓</Text>
                     )}
                   </View>
-                  <Text style={styles.colorTypeLabel}>Arrière-plan</Text>
+                  <Text style={styles.colorTypeLabel}>{t.background}</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             <View style={styles.sliderContainer}>
               <View style={styles.sliderRow}>
-                <Text style={styles.sliderLabel}>Rouge:</Text>
+                <Text style={styles.sliderLabel}>{t.red}</Text>
                 <Slider
                   style={styles.slider}
                   minimumValue={0}
@@ -1188,7 +1288,7 @@ export default function CrushListScreen({ navigation }) {
               </View>
 
               <View style={styles.sliderRow}>
-                <Text style={styles.sliderLabel}>Vert:</Text>
+                <Text style={styles.sliderLabel}>{t.green}</Text>
                 <Slider
                   style={styles.slider}
                   minimumValue={0}
@@ -1202,7 +1302,7 @@ export default function CrushListScreen({ navigation }) {
               </View>
 
               <View style={styles.sliderRow}>
-                <Text style={styles.sliderLabel}>Bleu:</Text>
+                <Text style={styles.sliderLabel}>{t.blue}</Text>
                 <Slider
                   style={styles.slider}
                   minimumValue={0}
@@ -1220,7 +1320,7 @@ export default function CrushListScreen({ navigation }) {
               style={styles.resetButton}
               onPress={resetColor}
             >
-              <Text style={styles.resetButtonText}>↻ Réinitialiser à la couleur d'origine</Text>
+              <Text style={styles.resetButtonText}>{t.resetToDefault}</Text>
             </TouchableOpacity>
 
             <View style={styles.modalButtons}>
@@ -1228,14 +1328,14 @@ export default function CrushListScreen({ navigation }) {
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setColorPickerVisible(false)}
               >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
+                <Text style={styles.cancelButtonText}>{t.cancel}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.modalButton, styles.confirmButton]}
                 onPress={saveColor}
               >
-                <Text style={styles.confirmButtonText}>Sauvegarder</Text>
+                <Text style={styles.confirmButtonText}>{t.save}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1252,14 +1352,14 @@ export default function CrushListScreen({ navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
-              {hasPassword ? 'Gérer le mot de passe' : 'Créer un mot de passe'}
+              {hasPassword ? t.managePassword : t.createPassword}
             </Text>
 
             {hasPassword && (
               <>
                 <TextInput
                   style={styles.input}
-                  placeholder="Mot de passe actuel"
+                  placeholder={t.currentPassword}
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
                   secureTextEntry
@@ -1267,14 +1367,14 @@ export default function CrushListScreen({ navigation }) {
                   autoCorrect={false}
                 />
                 <Text style={styles.passwordHint}>
-                  Laissez le nouveau mot de passe vide pour supprimer la protection
+                  {t.leaveEmptyToRemove}
                 </Text>
               </>
             )}
 
             <TextInput
               style={styles.input}
-              placeholder="Nouveau mot de passe"
+              placeholder={t.newPassword}
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry
@@ -1284,7 +1384,7 @@ export default function CrushListScreen({ navigation }) {
 
             <TextInput
               style={styles.input}
-              placeholder="Confirmer le nouveau mot de passe"
+              placeholder={t.confirmNewPassword}
               value={confirmNewPassword}
               onChangeText={setConfirmNewPassword}
               secureTextEntry
@@ -1302,7 +1402,7 @@ export default function CrushListScreen({ navigation }) {
                   setPasswordModalVisible(false);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
+                <Text style={styles.cancelButtonText}>{t.cancel}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1310,10 +1410,198 @@ export default function CrushListScreen({ navigation }) {
                 onPress={handlePasswordSubmit}
               >
                 <Text style={styles.confirmButtonText}>
-                  {hasPassword ? 'Modifier' : 'Créer'}
+                  {hasPassword ? t.modify : t.create}
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Font Picker Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={fontPickerVisible}
+        onRequestClose={() => setFontPickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t.chooseFonts}</Text>
+
+            {/* Category Selection Dropdown */}
+            <View style={styles.fontCategorySection}>
+              <Text style={styles.fontCategoryTitle}>{t.category}</Text>
+
+              <TouchableOpacity
+                style={styles.categoryDropdown}
+                onPress={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+              >
+                <Text style={styles.categoryDropdownText}>
+                  {selectedFontCategory === 'names' && t.names}
+                  {selectedFontCategory === 'headers' && t.headers}
+                  {selectedFontCategory === 'items' && t.items}
+                  {selectedFontCategory === 'titles' && t.titles}
+                </Text>
+                <Text style={styles.categoryDropdownIcon}>{categoryDropdownOpen ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+
+              {categoryDropdownOpen && (
+                <View style={styles.categoryDropdownMenu}>
+                  <TouchableOpacity
+                    style={[styles.categoryDropdownItem, selectedFontCategory === 'names' && { backgroundColor: `${themeColor}20` }]}
+                    onPress={() => {
+                      setSelectedFontCategory('names');
+                      setCategoryDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.categoryDropdownItemText, selectedFontCategory === 'names' && { color: themeColor, fontWeight: 'bold' }]}>
+                      {t.names}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.categoryDropdownItem, selectedFontCategory === 'headers' && { backgroundColor: `${themeColor}20` }]}
+                    onPress={() => {
+                      setSelectedFontCategory('headers');
+                      setCategoryDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.categoryDropdownItemText, selectedFontCategory === 'headers' && { color: themeColor, fontWeight: 'bold' }]}>
+                      {t.headers}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.categoryDropdownItem, selectedFontCategory === 'items' && { backgroundColor: `${themeColor}20` }]}
+                    onPress={() => {
+                      setSelectedFontCategory('items');
+                      setCategoryDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.categoryDropdownItemText, selectedFontCategory === 'items' && { color: themeColor, fontWeight: 'bold' }]}>
+                      {t.items}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.categoryDropdownItem, selectedFontCategory === 'titles' && { backgroundColor: `${themeColor}20` }]}
+                    onPress={() => {
+                      setSelectedFontCategory('titles');
+                      setCategoryDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.categoryDropdownItemText, selectedFontCategory === 'titles' && { color: themeColor, fontWeight: 'bold' }]}>
+                      {t.titles}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Font List */}
+            <ScrollView style={styles.fontList}>
+              {AVAILABLE_FONTS.map((font) => {
+                const isSelected =
+                  (selectedFontCategory === 'names' && fontNames === font.id) ||
+                  (selectedFontCategory === 'headers' && fontHeaders === font.id) ||
+                  (selectedFontCategory === 'items' && fontItems === font.id) ||
+                  (selectedFontCategory === 'titles' && fontTitles === font.id);
+
+                return (
+                  <TouchableOpacity
+                    key={font.id}
+                    style={[
+                      styles.fontOption,
+                      isSelected && { backgroundColor: `${themeColor}20` }
+                    ]}
+                    onPress={() => selectFont(font.id, selectedFontCategory)}
+                  >
+                    <Text style={[
+                      styles.fontOptionText,
+                      font.family && { fontFamily: font.family }
+                    ]}>
+                      {font.name}
+                    </Text>
+                    {isSelected && (
+                      <Text style={[styles.fontSelectedIcon, { color: themeColor }]}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Reset and Close Buttons */}
+            <View style={styles.fontModalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={resetFonts}
+              >
+                <Text style={styles.cancelButtonText}>{t.reset}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton, { backgroundColor: themeColor }]}
+                onPress={() => setFontPickerVisible(false)}
+              >
+                <Text style={styles.confirmButtonText}>{t.close}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Language Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={languageModalVisible}
+        onRequestClose={() => setLanguageModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.settingsModalContent}>
+            <Text style={styles.modalTitle}>{t.chooseLanguage}</Text>
+
+            <TouchableOpacity
+              style={[styles.settingsOption, language === 'fr' && { backgroundColor: `${themeColor}15` }]}
+              onPress={async () => {
+                setLanguage('fr');
+                await saveLanguage('fr');
+                setLanguageModalVisible(false);
+              }}
+            >
+              <Text style={styles.settingsOptionIcon}>🇫🇷</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={styles.settingsOptionTitle}>{t.french}</Text>
+              </View>
+              {language === 'fr' && (
+                <Text style={[styles.fontSelectedIcon, { color: themeColor }]}>✓</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.settingsOption, language === 'en' && { backgroundColor: `${themeColor}15` }]}
+              onPress={async () => {
+                setLanguage('en');
+                await saveLanguage('en');
+                setLanguageModalVisible(false);
+              }}
+            >
+              <Text style={styles.settingsOptionIcon}>🇬🇧</Text>
+              <View style={styles.settingsOptionTextContainer}>
+                <Text style={styles.settingsOptionTitle}>{t.english}</Text>
+              </View>
+              {language === 'en' && (
+                <Text style={[styles.fontSelectedIcon, { color: themeColor }]}>✓</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingsCloseButton}
+              onPress={() => setLanguageModalVisible(false)}
+            >
+              <Text style={styles.settingsCloseButtonText}>✕</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1414,6 +1702,17 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '85%',
     maxWidth: 400,
+    maxHeight: '80%',
+  },
+  settingsScrollView: {
+    flexGrow: 0,
+  },
+  scrollIndicator: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#999',
+    marginTop: 8,
+    marginBottom: 4,
   },
   settingsCloseButton: {
     alignSelf: 'center',
@@ -1955,5 +2254,81 @@ const styles = StyleSheet.create({
   colorTypeLabel: {
     fontSize: 15,
     color: '#333',
+  },
+  fontCategorySection: {
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  fontCategoryTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  categoryDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#DDD',
+  },
+  categoryDropdownText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  categoryDropdownIcon: {
+    fontSize: 12,
+    color: '#666',
+  },
+  categoryDropdownMenu: {
+    marginTop: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#DDD',
+    overflow: 'hidden',
+  },
+  categoryDropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  categoryDropdownItemText: {
+    fontSize: 15,
+    color: '#333',
+  },
+  fontList: {
+    maxHeight: 300,
+    marginBottom: 16,
+  },
+  fontOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: '#F9F9F9',
+  },
+  fontOptionText: {
+    fontSize: 18,
+    color: '#333',
+  },
+  fontSelectedIcon: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  fontModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
   },
 });
