@@ -2,6 +2,19 @@
 
 A React Native mobile app to track your crushes with a gamified life system. Each crush has 5 lives - document good actions and mistakes to see how your relationships evolve!
 
+## Screenshots
+
+<p align="center">
+  <img src="assets/Screenshot_1.jpg" width="200" alt="Crush List"/>
+  <img src="assets/Screenshot_2.jpg" width="200" alt="Crush Detail"/>
+  <img src="assets/Screenshot_3.jpg" width="200" alt="Settings"/>
+  <img src="assets/Screenshot_4.jpg" width="200" alt="Diary"/>
+</p>
+
+<p align="center">
+  <em>Crush List • Crush Detail • Settings • Diary</em>
+</p>
+
 ## Features
 
 ### Core Functionality
