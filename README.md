@@ -1,115 +1,133 @@
-# Crush Life - iPhone App
+# 💕 Crushit
 
-An iPhone app to track your crushes, their good and bad actions, and monitor your mistakes. After 5 mistakes, a crush is automatically destroyed and removed from your list.
+A React Native mobile app to track your crushes with a gamified life system. Each crush has 5 lives - document good actions and mistakes to see how your relationships evolve!
 
 ## Features
 
-- **Crush List**: View all your crushes with their mistake counts
-- **Mistake Tracking**: Visual indicator showing remaining lives (5 total)
-- **Pros & Cons Lists**: Separate lists for good actions and bad actions/mistakes
-- **Auto-Destruction**: Crushes are automatically removed after 5 mistakes
-- **Local Storage**: All data is saved locally on your device using AsyncStorage
+### Core Functionality
+- **Life System**: Each crush starts with 5 hearts - mistakes cost lives!
+- **Action Tracking**: Record good actions (pros) and mistakes (cons)
+- **Sentiments Meter**: 0-100 scale to track your emotional intensity
+- **Status Management**: Active, Ended, or Standby relationships
+- **Personal Journal**: Private diary entries for each crush
 
-## Setup Instructions
+### Customization
+- **Theme Colors**: Customize header and background colors with RGB picker
+- **Font Selection**: 11 beautiful Google Fonts across 4 UI categories
+- **Color Presets**: Save up to 2 custom color schemes
+- **Profile Pictures**: Add photos to personalize each crush
+
+### Organization
+- **Archive System**: Store ended relationships separately
+- **Cemetery**: View "game over" crushes (0 lives)
+- **Drag & Drop Reorder**: Organize crushes by priority
+- **Qualities & Defects**: Track personality traits
+
+### Security
+- **Password Protection**: Optional app lock
+- **Secure Storage**: Password hashing with salt
+- **Input Validation**: Protection against injection attacks
+- **Local Data**: All data stays on your device
+
+### Easter Eggs
+- **Secret Revival**: Tap header 7 times to restore destroyed crushes
+- **Relationship Oracle**: Long-press add button for predictions
+- **Trait Flags**: Double-tap qualities/defects for celebrations
+
+## Installation
 
 ### Prerequisites
-
-- Node.js (v14 or higher)
+- Node.js (v14+)
 - npm or yarn
 - Expo CLI
-- Expo Go app on your iPhone (download from App Store)
+- Expo Go app on your device
 
-### Installation
-
-1. Install dependencies:
+### Setup
 ```bash
+# Install dependencies
 npm install
-```
 
-2. Start the development server:
-```bash
+# Start development server
 npm start
-```
 
-3. Scan the QR code with your iPhone camera or Expo Go app
+# Run tests
+npm test
+```
 
 ## Usage
 
 ### Adding a Crush
-1. Tap the **+** button on the main screen
-2. Enter the crush's name
-3. Tap "Add"
+1. Tap the floating **+** button
+2. Enter name and optional description
+3. Add a profile picture (optional)
 
-### Adding Good Actions (Pros)
-1. Tap on a crush to view details
-2. Tap the **+** button in the "Good Actions" section
-3. Enter what they did right
-4. Tap "Add"
+### Tracking Actions
+1. Open crush detail screen
+2. Add good actions to celebrate wins
+3. Document mistakes (costs lives!)
+4. Adjust sentiments slider as feelings evolve
 
-### Adding Bad Actions / Mistakes (Cons)
-1. Tap on a crush to view details
-2. Tap the **+** button in the "Bad Actions / Mistakes" section
-3. Enter what mistake happened
-4. Tap "Add"
-5. **Note**: This will count as a mistake and reduce their remaining lives
-
-### Removing Actions
-- Long press on any action item to remove it
-- Removing a bad action will restore one life
-
-### Deleting a Crush
-- Long press on a crush in the main list to delete them manually
-- Crushes are automatically deleted after reaching 5 mistakes
-
-## App Structure
-
-```
-crush-life/
-├── App.js                          # Main app entry with navigation
-├── src/
-│   ├── screens/
-│   │   ├── CrushListScreen.js     # Main list of crushes
-│   │   └── CrushDetailScreen.js   # Crush details with pros/cons
-│   └── utils/
-│       └── storage.js             # AsyncStorage helper functions
-├── package.json
-└── app.json
-```
-
-## Data Structure
-
-Each crush is stored with the following structure:
-```javascript
-{
-  id: string,
-  name: string,
-  mistakes: number,        // 0-5, auto-destroyed at 5
-  pros: Array,            // Good actions
-  cons: Array,            // Bad actions/mistakes
-  createdAt: string
-}
-```
+### Journaling
+1. Access journal from crush detail screen
+2. Create entries with title and description
+3. Edit or delete entries as needed
 
 ## Tech Stack
 
-- React Native
-- Expo
-- React Navigation
-- AsyncStorage
+- **Framework**: React Native + Expo
+- **Navigation**: React Navigation (Native Stack)
+- **Storage**: AsyncStorage + Expo SecureStore
+- **Fonts**: @expo-google-fonts (11 families)
+- **Testing**: Jest + React Native Testing Library
+
+## Project Structure
+
+```
+crushit/
+├── App.js                      # Main entry with navigation
+├── src/
+│   ├── screens/
+│   │   ├── CrushListScreen.js  # Main crush list
+│   │   ├── CrushDetailScreen.js # Crush details
+│   │   ├── DiaryScreen.js      # Personal journal
+│   │   └── LockScreen.js       # Password auth
+│   └── utils/
+│       ├── storage.js          # Data persistence
+│       ├── sanitize.js         # Input validation
+│       └── translations.js     # i18n (FR/EN)
+├── __tests__/                  # Test files
+└── coverage/                   # Test coverage reports
+```
+
+## Test Coverage
+
+| File | Statements | Lines |
+|------|------------|-------|
+| DiaryScreen.js | 100% | 100% |
+| storage.js | 98.44% | 99.56% |
+| LockScreen.js | 97.43% | 97.43% |
+| sanitize.js | 100% | 100% |
+| translations.js | 100% | 100% |
+
+**346 tests passing**
 
 ## Color Scheme
 
-- Primary: #FF6B9D (Pink)
-- Background: #FFF0F5 (Light Pink)
-- Good Actions: #E8F5E9 (Light Green)
-- Bad Actions: #FFEBEE (Light Red)
-- Destroyed: #333 (Dark Gray)
+- **Primary**: #FF6B9D (Pink)
+- **Background**: #FFF0F5 (Light Pink)
+- **Good Actions**: #E8F5E9 (Light Green)
+- **Bad Actions**: #FFEBEE (Light Red)
+- **Customizable**: Full RGB spectrum
 
-## Future Enhancements
+## Languages
 
-- Add photos for crushes
-- Export data to JSON/CSV
-- Add notes section
-- Set custom mistake limits
-- Add statistics and insights
-- Cloud sync
+- French (default)
+- English
+
+## Version
+
+**1.3.0** - See [APP_SUMMARY.md](APP_SUMMARY.md) for full changelog.
+
+## License
+
+Private
